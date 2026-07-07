@@ -74,33 +74,9 @@ struct DialConfig: Codable, Equatable {
     var inverted = false
 }
 
-enum SliderMode: String, Codable, CaseIterable, Identifiable {
-    /// Two fingers side by side, starting at the very top or bottom edge,
-    /// swiping vertically.
-    case verticalFromEdge
-    /// One finger on the top edge, one on the bottom, sweeping horizontally
-    /// together.
-    case horizontalRails
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .verticalFromEdge: "Swipe up/down from an edge"
-        case .horizontalRails: "Top + bottom fingers, sweep sideways"
-        }
-    }
-
-    var help: String {
-        switch self {
-        case .verticalFromEdge:
-            "Start with two fingers at the very top or bottom edge of the pad, then swipe vertically — the pad becomes a slider."
-        case .horizontalRails:
-            "Rest one finger on the top edge and one on the bottom (same spot horizontally), then sweep both left or right together."
-        }
-    }
-}
-
+/// The rails slider: one finger on the top edge, one on the bottom,
+/// sweeping horizontally together. (A vertical variant existed briefly but
+/// was removed — it competed directly with scrolling.)
 struct SliderConfig: Codable, Equatable {
     var enabled = true
     var control: ContinuousControl = .keyboardBrightness
@@ -108,7 +84,87 @@ struct SliderConfig: Codable, Equatable {
     /// so the physical distance scales with the trackpad's size.
     var sensitivity: Double = 1.0
     var inverted = false
-    var mode: SliderMode = .verticalFromEdge
+}
+
+// MARK: - Custom gestures
+
+enum FingerDirection: String, Codable, CaseIterable, Identifiable {
+    case none, up, down, left, right
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .none: "Stationary"
+        case .up: "Up"
+        case .down: "Down"
+        case .left: "Left"
+        case .right: "Right"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .none: "hand.raised.fill"
+        case .up: "arrow.up"
+        case .down: "arrow.down"
+        case .left: "arrow.left"
+        case .right: "arrow.right"
+        }
+    }
+
+    /// Unit vector in trackpad coordinates (origin bottom-left, y up).
+    var vector: SIMD2<Float>? {
+        switch self {
+        case .none: nil
+        case .up: SIMD2(0, 1)
+        case .down: SIMD2(0, -1)
+        case .left: SIMD2(-1, 0)
+        case .right: SIMD2(1, 0)
+        }
+    }
+}
+
+enum SpeedRequirement: String, Codable, CaseIterable, Identifiable {
+    case any, slow, fast
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .any: "Any speed"
+        case .slow: "Slow, deliberate"
+        case .fast: "Quick flick"
+        }
+    }
+}
+
+struct CustomFinger: Codable, Equatable, Identifiable {
+    var id = UUID()
+    /// Landing zone center, normalized trackpad coordinates (y up).
+    var x: Double
+    var y: Double
+    /// Landing zone radius.
+    var radius: Double = 0.22
+    var direction: FingerDirection = .none
+}
+
+struct CustomGesture: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var name = "New Gesture"
+    var enabled = true
+    var fingers: [CustomFinger] = [
+        CustomFinger(x: 0.35, y: 0.5, direction: .up),
+        CustomFinger(x: 0.65, y: 0.5, direction: .up),
+    ]
+    /// true: motion adjusts a continuous control; false: fires an action once.
+    var isContinuous = true
+    var control: ContinuousControl = .volume
+    var action: DiscreteAction = .playPause
+    var appPath = ""
+    var shellCommand = ""
+    var sensitivity: Double = 1.0
+    var speed: SpeedRequirement = .any
 }
 
 struct TapConfig: Codable, Equatable {
@@ -124,14 +180,22 @@ struct SleightConfig: Codable, Equatable {
     var threeFingerTap = TapConfig()
     var fourFingerTap = TapConfig()
     var fiveFingerTap = TapConfig()
+    var customGestures: [CustomGesture] = []
     var hapticDetents = true
     var showHUD = true
+    /// Swallow scroll/swipe input the moment a gesture posture is detected,
+    /// so pages can't move or navigate back/forward while a gesture forms.
+    /// (This blocks input, not rendering — videos keep playing.)
+    var freezeScreen = true
+    /// Additionally pin the pointer in place while a gesture is active.
+    var freezePointer = false
     var enabled = true
 
     enum CodingKeys: String, CodingKey {
         case twoFingerDial, threeFingerDial, slider
         case threeFingerTap, fourFingerTap, fiveFingerTap
-        case hapticDetents, showHUD, enabled
+        case customGestures
+        case hapticDetents, showHUD, freezeScreen, freezePointer, enabled
     }
 }
 
@@ -147,8 +211,11 @@ extension SleightConfig {
         threeFingerTap = (try? c.decodeIfPresent(TapConfig.self, forKey: .threeFingerTap)) ?? nil ?? defaults.threeFingerTap
         fourFingerTap = (try? c.decodeIfPresent(TapConfig.self, forKey: .fourFingerTap)) ?? nil ?? defaults.fourFingerTap
         fiveFingerTap = (try? c.decodeIfPresent(TapConfig.self, forKey: .fiveFingerTap)) ?? nil ?? defaults.fiveFingerTap
+        customGestures = (try? c.decodeIfPresent([CustomGesture].self, forKey: .customGestures)) ?? nil ?? defaults.customGestures
         hapticDetents = (try? c.decodeIfPresent(Bool.self, forKey: .hapticDetents)) ?? nil ?? defaults.hapticDetents
         showHUD = (try? c.decodeIfPresent(Bool.self, forKey: .showHUD)) ?? nil ?? defaults.showHUD
+        freezeScreen = (try? c.decodeIfPresent(Bool.self, forKey: .freezeScreen)) ?? nil ?? defaults.freezeScreen
+        freezePointer = (try? c.decodeIfPresent(Bool.self, forKey: .freezePointer)) ?? nil ?? defaults.freezePointer
         enabled = (try? c.decodeIfPresent(Bool.self, forKey: .enabled)) ?? nil ?? defaults.enabled
     }
 }

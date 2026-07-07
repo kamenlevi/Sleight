@@ -116,6 +116,14 @@ final class GestureCoordinator: @unchecked Sendable {
 
     // MARK: - Continuous gestures
 
+    /// A landing posture or early motion looks like a gesture: freeze
+    /// scrolling immediately so the page can't move or navigate while the
+    /// gesture finishes forming. Cleared by the engine if it was a scroll.
+    func candidateFreezeChanged(_ frozen: Bool) {
+        guard session == nil else { return } // active gesture owns suppression
+        EventSuppressor.shared.setLevel(frozen && config.freezeScreen ? .scrollOnly : .off)
+    }
+
     func gestureBegan(control: ContinuousControl, deviceID: UInt) {
         let current: Float?
         switch control {
@@ -140,7 +148,8 @@ final class GestureCoordinator: @unchecked Sendable {
             available: current != nil,
             deviceID: deviceID
         )
-        EventSuppressor.shared.setSuppressing(true)
+        EventSuppressor.shared.setLevel(.gesture)
+        EventSuppressor.shared.setPointerFrozen(config.freezePointer)
         if config.showHUD {
             let available = current != nil
             Task { @MainActor in
@@ -185,7 +194,8 @@ final class GestureCoordinator: @unchecked Sendable {
     /// session so the gesture resumes when the finger returns, but let
     /// scrolling through again in the meantime.
     func gestureSuspended() {
-        EventSuppressor.shared.setSuppressing(false)
+        EventSuppressor.shared.setLevel(.off)
+        EventSuppressor.shared.setPointerFrozen(false)
         Task { @MainActor in
             HUDController.shared.scheduleHide(after: 1.5)
         }
@@ -193,7 +203,8 @@ final class GestureCoordinator: @unchecked Sendable {
 
     func gestureResumed() {
         guard let current = session else { return }
-        EventSuppressor.shared.setSuppressing(true)
+        EventSuppressor.shared.setLevel(.gesture)
+        EventSuppressor.shared.setPointerFrozen(config.freezePointer)
         if config.showHUD {
             let control = current.control
             let value = current.value
@@ -206,7 +217,8 @@ final class GestureCoordinator: @unchecked Sendable {
 
     func gestureEnded() {
         session = nil
-        EventSuppressor.shared.setSuppressing(false)
+        EventSuppressor.shared.setLevel(.off)
+        EventSuppressor.shared.setPointerFrozen(false)
         Task { @MainActor in
             HUDController.shared.scheduleHide()
         }
@@ -222,11 +234,11 @@ final class GestureCoordinator: @unchecked Sendable {
         case 5: tapConfig = config.fiveFingerTap
         default: return
         }
-        perform(tapConfig)
+        performDiscrete(action: tapConfig.action, appPath: tapConfig.appPath, shellCommand: tapConfig.shellCommand)
     }
 
-    private func perform(_ tap: TapConfig) {
-        switch tap.action {
+    func performDiscrete(action: DiscreteAction, appPath: String, shellCommand: String) {
+        switch action {
         case .none:
             break
         case .playPause:
@@ -252,7 +264,7 @@ final class GestureCoordinator: @unchecked Sendable {
                 }
             }
         case .launchApp:
-            let path = tap.appPath
+            let path = appPath
             guard !path.isEmpty else { return }
             Task { @MainActor in
                 NSWorkspace.shared.openApplication(
@@ -261,7 +273,7 @@ final class GestureCoordinator: @unchecked Sendable {
                 )
             }
         case .shellCommand:
-            let command = tap.shellCommand
+            let command = shellCommand
             guard !command.isEmpty else { return }
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/bin/zsh")

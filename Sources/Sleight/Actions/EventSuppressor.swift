@@ -1,39 +1,60 @@
 import AppKit
 import CoreGraphics
 
-/// While a dial or arc gesture is active, macOS would still interpret the
-/// same fingers as scrolling. This event tap swallows scroll-wheel and
-/// gesture events for the duration (plus the momentum tail) so turning the
-/// volume knob never also scrolls the page underneath.
+/// While a gesture is forming or active, macOS would still interpret the
+/// same fingers as scrolling or a back/forward swipe. This event tap
+/// swallows scroll-wheel and gesture events for the duration (plus the
+/// momentum tail), and can optionally pin the pointer. Blocking happens at
+/// the input layer — pages never see the events, but nothing is paused, so
+/// videos keep playing.
 ///
-/// `setSuppressing` is called from the touch queue and `shouldSwallow` from
-/// the event tap thread; the lock keeps them coherent. `start` must be
-/// called on the main thread.
+/// Levels are set from the touch queue and read on the event tap thread;
+/// the lock keeps them coherent. `start` must be called on the main thread.
 final class EventSuppressor: @unchecked Sendable {
     static let shared = EventSuppressor()
 
+    enum Level {
+        case off
+        /// Swallow scroll/swipe input while a candidate gesture forms.
+        case scrollOnly
+        /// A gesture is active: swallow scroll/swipe input.
+        case gesture
+    }
+
     private let lock = NSLock()
-    private var active = false
+    private var level: Level = .off
+    private var pointerFrozen = false
     private var swallowMomentumUntil: Double = 0
 
     private var tap: CFMachPort?
 
     private init() {}
 
-    func setSuppressing(_ on: Bool) {
+    func setLevel(_ newLevel: Level) {
         lock.lock()
-        if !on, active {
+        if newLevel == .off, level != .off {
             // Fingers just lifted; momentum scroll events may still arrive.
             swallowMomentumUntil = CFAbsoluteTimeGetCurrent() + 0.5
         }
-        active = on
+        level = newLevel
+        lock.unlock()
+    }
+
+    func setPointerFrozen(_ frozen: Bool) {
+        lock.lock()
+        pointerFrozen = frozen
         lock.unlock()
     }
 
     private func shouldSwallow(_ event: CGEvent, type: CGEventType) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        if active { return true }
+
+        if type == .mouseMoved || type == .leftMouseDragged
+            || type == .rightMouseDragged || type == .otherMouseDragged {
+            return pointerFrozen
+        }
+        if level != .off { return true }
         if type == .scrollWheel, CFAbsoluteTimeGetCurrent() < swallowMomentumUntil {
             let momentum = event.getIntegerValueField(.scrollWheelEventMomentumPhase)
             return momentum != 0
@@ -51,9 +72,14 @@ final class EventSuppressor: @unchecked Sendable {
 
     func start() {
         guard tap == nil else { return }
-        // 29 and 30 are the undocumented gesture / dock-gesture event types.
+        // 29 and 30 are the undocumented gesture / dock-gesture event types
+        // (pinch, rotate, swipe navigation).
         let mask: CGEventMask =
             (1 << CGEventType.scrollWheel.rawValue) | (1 << 29) | (1 << 30)
+            | (1 << CGEventType.mouseMoved.rawValue)
+            | (1 << CGEventType.leftMouseDragged.rawValue)
+            | (1 << CGEventType.rightMouseDragged.rawValue)
+            | (1 << CGEventType.otherMouseDragged.rawValue)
 
         let callback: CGEventTapCallBack = { _, type, event, _ in
             let suppressor = EventSuppressor.shared

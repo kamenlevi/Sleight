@@ -12,7 +12,8 @@ Free, open source, and fully native (Swift + SwiftUI, no dependencies).
 |---|---|---|
 | **Two-Finger Dial** | Place two fingers (thumb + index feels best) and rotate them like a knob | Volume |
 | **Three-Finger Dial** | Same knob motion with three fingers — e.g. index + middle together, thumb below | Display brightness |
-| **Edge Slider** | Start two fingers at the very top/bottom edge and swipe vertically — or (selectable) one finger on each edge, sweeping sideways together | Keyboard backlight |
+| **Edge Slider** | One finger on the top edge, one on the bottom (same spot horizontally), sweep both sideways together | Keyboard backlight |
+| **Custom gestures** | Design your own in Settings → Custom: place finger zones on the pad, give each a direction or keep it stationary, choose speed and what it controls |  |
 | **3 / 4 / 5-finger tap** | Quick tap | Configurable |
 
 Every continuous gesture can be remapped to volume, display brightness, or

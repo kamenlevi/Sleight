@@ -15,6 +15,9 @@ struct SettingsView: View {
             GestureSettingsView()
                 .tabItem { Label("Gestures", systemImage: "hand.draw") }
                 .tag(SettingsTab.gestures)
+            CustomGesturesView()
+                .tabItem { Label("Custom", systemImage: "wand.and.stars") }
+                .tag(SettingsTab.custom)
             VisualizerView()
                 .tabItem { Label("Visualizer", systemImage: "dot.circle.and.hand.point.up.left.fill") }
                 .tag(SettingsTab.visualizer)
@@ -61,6 +64,17 @@ struct GeneralSettingsView: View {
                 Text("Feedback")
             } footer: {
                 Text("Detents make the dial click softly every few percent, like a physical knob.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("Freeze scrolling during gestures", isOn: $store.config.freezeScreen)
+                Toggle("Also freeze the pointer during gestures", isOn: $store.config.freezePointer)
+            } header: {
+                Text("During Gestures")
+            } footer: {
+                Text("Freezing blocks scroll and swipe input the instant a gesture starts forming, so pages can't move or navigate back and forward underneath your fingers. Nothing is paused — videos keep playing.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -231,12 +245,12 @@ private struct SliderSection: View {
                 Label {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Edge Slider").fontWeight(.medium)
-                        Text(config.mode.help)
+                        Text("Rest one finger on the top edge and one on the bottom (same spot horizontally), then sweep both left or right together.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
                 } icon: {
-                    Image(systemName: "slider.vertical.3")
+                    Image(systemName: "slider.horizontal.3")
                         .font(.title2)
                         .foregroundStyle(.tint)
                         .frame(width: 30)
@@ -248,12 +262,6 @@ private struct SliderSection: View {
             }
 
             if config.enabled {
-                Picker("Style", selection: $config.mode) {
-                    ForEach(SliderMode.allCases) { mode in
-                        Text(mode.label).tag(mode)
-                    }
-                }
-
                 Picker("Controls", selection: $config.control) {
                     ForEach(ContinuousControl.allCases) { control in
                         Label(control.label, systemImage: control.symbol).tag(control)

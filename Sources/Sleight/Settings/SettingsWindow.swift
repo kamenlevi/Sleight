@@ -12,6 +12,7 @@ enum SettingsWindow {
             SettingsState.shared.selectedTab = tab
         }
         if let window {
+            window.collectionBehavior.insert(.moveToActiveSpace)
             window.makeKeyAndOrderFront(nil)
             NSApp.activate()
             return
@@ -22,6 +23,9 @@ enum SettingsWindow {
         window.styleMask = [.titled, .closable, .miniaturizable]
         window.titlebarAppearsTransparent = false
         window.isReleasedWhenClosed = false
+        // Follow the user: opening the window from another desktop moves it
+        // there instead of yanking them back to where it was first opened.
+        window.collectionBehavior.insert(.moveToActiveSpace)
         window.setContentSize(NSSize(width: 640, height: 600))
         window.center()
         Self.window = window
@@ -33,6 +37,7 @@ enum SettingsWindow {
 enum SettingsTab: String {
     case general
     case gestures
+    case custom
     case visualizer
     case about
 }

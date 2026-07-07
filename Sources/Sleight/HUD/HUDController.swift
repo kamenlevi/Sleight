@@ -52,7 +52,12 @@ final class HUDController {
         let panel = self.panel ?? makePanel()
         self.panel = panel
 
-        if let screen = NSScreen.main {
+        // Show on the screen the user is actually looking at — the one with
+        // the pointer — never a previous display or Space.
+        let mouse = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) }
+            ?? NSScreen.main
+        if let screen {
             let frame = screen.visibleFrame
             let size = panel.frame.size
             panel.setFrameOrigin(NSPoint(
@@ -61,9 +66,9 @@ final class HUDController {
             ))
         }
 
-        if !panel.isVisible || panel.alphaValue < 1 {
+        panel.orderFrontRegardless()
+        if panel.alphaValue < 1 {
             panel.alphaValue = 0
-            panel.orderFrontRegardless()
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0.12
                 panel.animator().alphaValue = 1
