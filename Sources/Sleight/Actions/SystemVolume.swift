@@ -4,7 +4,23 @@ import Foundation
 /// Direct CoreAudio control of the default output device, giving the dial
 /// smooth sub-percent steps instead of the 16 coarse notches of volume keys.
 enum SystemVolume {
+    // Resolved once per gesture (refreshDevice) instead of per frame; the
+    // lookup is cheap but not free at 125 Hz.
+    private static var cachedDevice: AudioObjectID?
+
+    /// Re-resolve the default output device. Call at gesture start.
+    static func refreshDevice() {
+        cachedDevice = resolveDefaultOutputDevice()
+    }
+
     private static func defaultOutputDevice() -> AudioObjectID? {
+        if let cachedDevice { return cachedDevice }
+        let resolved = resolveDefaultOutputDevice()
+        cachedDevice = resolved
+        return resolved
+    }
+
+    private static func resolveDefaultOutputDevice() -> AudioObjectID? {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDefaultOutputDevice,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -49,12 +65,11 @@ enum SystemVolume {
         var settable = DarwinBoolean(false)
         guard AudioObjectIsPropertySettable(device, &address, &settable) == noErr,
               settable.boolValue else { return }
+        // Mute handling happens once at gesture start (GestureCoordinator),
+        // not per frame — this runs at 125 Hz during a dial.
         AudioObjectSetPropertyData(
             device, &address, 0, nil, UInt32(MemoryLayout<Float32>.size), &volume
         )
-        if volume > 0, isMuted() == true {
-            setMuted(false)
-        }
     }
 
     static func isMuted() -> Bool? {

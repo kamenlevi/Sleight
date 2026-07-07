@@ -152,12 +152,7 @@ struct GestureSettingsView: View {
                 )
             }
             Section {
-                DialSection(
-                    title: "Hold + Sweep",
-                    subtitle: "Rest a thumb on the pad, then sweep another finger around it in a line or an arc.",
-                    symbol: "hand.point.up.left.and.text.fill",
-                    config: $store.config.holdArc
-                )
+                SliderSection(config: $store.config.slider)
             }
 
             Section {
@@ -205,6 +200,60 @@ private struct DialSection: View {
             }
 
             if config.enabled {
+                Picker("Controls", selection: $config.control) {
+                    ForEach(ContinuousControl.allCases) { control in
+                        Label(control.label, systemImage: control.symbol).tag(control)
+                    }
+                }
+
+                HStack {
+                    Text("Sensitivity")
+                    Slider(value: $config.sensitivity, in: 0.25...3.0)
+                    Text(config.sensitivity, format: .number.precision(.fractionLength(1)))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .frame(width: 30)
+                }
+
+                Toggle("Reverse direction", isOn: $config.inverted)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+private struct SliderSection: View {
+    @Binding var config: SliderConfig
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Edge Slider").fontWeight(.medium)
+                        Text(config.mode.help)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "slider.vertical.3")
+                        .font(.title2)
+                        .foregroundStyle(.tint)
+                        .frame(width: 30)
+                }
+                Spacer()
+                Toggle("", isOn: $config.enabled)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
+
+            if config.enabled {
+                Picker("Style", selection: $config.mode) {
+                    ForEach(SliderMode.allCases) { mode in
+                        Text(mode.label).tag(mode)
+                    }
+                }
+
                 Picker("Controls", selection: $config.control) {
                     ForEach(ContinuousControl.allCases) { control in
                         Label(control.label, systemImage: control.symbol).tag(control)

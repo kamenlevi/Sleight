@@ -40,6 +40,18 @@ final class TouchStream {
     private var rescanTimer: Timer?
     private var wakeObserver: NSObjectProtocol?
 
+    // Maps a device's pointer bits (TouchFrame.deviceID) to its hardware
+    // multitouch ID, for addressing haptic actuators. Read from the gesture
+    // queue, written on start().
+    private let idMapLock = NSLock()
+    private var hardwareIDs: [UInt: UInt64] = [:]
+
+    func hardwareID(for deviceID: UInt) -> UInt64? {
+        idMapLock.lock()
+        defer { idMapLock.unlock() }
+        return hardwareIDs[deviceID]
+    }
+
     // MultitouchSupport requires a plain C function pointer, so the frame
     // callback bounces through the shared instance.
     private static let contactCallback: MultitouchBridge.ContactCallback = { device, touchesPtr, count, timestamp, _ in
@@ -82,10 +94,18 @@ final class TouchStream {
             deviceListOwner = list.owner
             devices = list.devices
         }
+        var ids: [UInt: UInt64] = [:]
         for device in devices {
             MultitouchBridge.register(device, callback: TouchStream.contactCallback)
             MultitouchBridge.start(device)
+            if let hardwareID = MultitouchBridge.hardwareID(of: device) {
+                ids[UInt(bitPattern: device)] = hardwareID
+            }
         }
+        idMapLock.lock()
+        hardwareIDs = ids
+        idMapLock.unlock()
+        HapticEngine.shared.reset()
         deviceCount = devices.count
         startedWithInputMonitoring = Permissions.inputMonitoringGranted
         running = true

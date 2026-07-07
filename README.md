@@ -12,7 +12,7 @@ Free, open source, and fully native (Swift + SwiftUI, no dependencies).
 |---|---|---|
 | **Two-Finger Dial** | Place two fingers (thumb + index feels best) and rotate them like a knob | Volume |
 | **Three-Finger Dial** | Same knob motion with three fingers — e.g. index + middle together, thumb below | Display brightness |
-| **Hold + Sweep** | Rest a thumb on the pad, then sweep another finger around it in a line or arc | Keyboard backlight |
+| **Edge Slider** | Start two fingers at the very top/bottom edge and swipe vertically — or (selectable) one finger on each edge, sweeping sideways together | Keyboard backlight |
 | **3 / 4 / 5-finger tap** | Quick tap | Configurable |
 
 Every continuous gesture can be remapped to volume, display brightness, or
@@ -21,8 +21,9 @@ play/pause, skip tracks, mute, launch an app, or run a shell command.
 
 Details that make it feel native:
 
-- **Haptic detents** — the trackpad clicks softly every few percent, like a real knob.
+- **Haptic detents** — the trackpad clicks softly every few percent, like a real knob, driven directly through the trackpad's actuator so it never skips.
 - **Zero dead zone** — rotation accumulated while the gesture is being recognized is applied the moment it activates, so nothing is lost.
+- **Lift-and-resume** — lift one finger mid-gesture (keep any finger down) and the gesture waits; put the finger back and keep turning.
 - **Scroll suppression** — while a dial is active, an event tap swallows the scroll events macOS would otherwise send, so turning the volume never scrolls the page under your cursor.
 - **Smooth values** — volume is set directly through CoreAudio with sub-percent resolution instead of the 16 coarse steps of the volume keys.
 - **A HUD** that appears while you adjust and fades away.
@@ -62,9 +63,12 @@ app can never ship on the App Store — build it yourself and enjoy.
 
 The gesture engine measures the mean angular velocity of the touch set around
 its own centroid each frame (translation cancels out), which cleanly separates
-"turning a knob" from "scrolling" within a few degrees of rotation. A
-hold-+-sweep is distinguished from a dial by displacement ratio and landing
-stagger: rest the thumb first, then sweep.
+"turning a knob" from "scrolling" within a few degrees of rotation. As a
+second guard, dials require *non-parallel* finger motion: scrolling fingers
+travel in the same direction (cosine similarity ≈ +1) while dialing fingers
+oppose each other (≈ −1), so scrolls can't misfire a dial no matter how
+sloppy the arc. Sliders are distinguished by their starting posture at the
+pad edges, which scrolling never uses.
 
 ## Notes
 
