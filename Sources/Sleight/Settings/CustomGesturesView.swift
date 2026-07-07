@@ -98,6 +98,9 @@ private struct GestureEditor: View {
     @Binding var gesture: CustomGesture
     @Binding var selectedFingerID: UUID?
     let onDelete: () -> Void
+    @State private var drawingBoundary = false
+
+    private var hasBoundary: Bool { (gesture.boundary?.count ?? 0) >= 3 }
 
     var body: some View {
         ScrollView {
@@ -111,12 +114,19 @@ private struct GestureEditor: View {
                         .toggleStyle(.switch)
                 }
 
-                Text("Drag the circles to where each finger should land. Select one to set its movement.")
+                Text(drawingBoundary
+                     ? "Draw an outline on the pad — the gesture will only be detected inside it. The dimmed area is ignored."
+                     : "Drag the circles to where each finger should land. Select one to set its movement.")
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(drawingBoundary ? Color.accentColor : .secondary)
 
-                FingerCanvas(fingers: $gesture.fingers, selectedFingerID: $selectedFingerID)
-                    .aspectRatio(1.6, contentMode: .fit)
+                FingerCanvas(
+                    fingers: $gesture.fingers,
+                    boundary: $gesture.boundary,
+                    selectedFingerID: $selectedFingerID,
+                    drawingBoundary: $drawingBoundary
+                )
+                .aspectRatio(1.6, contentMode: .fit)
 
                 HStack {
                     Button {
@@ -128,6 +138,20 @@ private struct GestureEditor: View {
                         Label("Add Finger", systemImage: "plus.circle")
                     }
                     .disabled(gesture.fingers.count >= 5)
+
+                    Toggle(isOn: $drawingBoundary) {
+                        Label("Draw Boundary", systemImage: "pencil.and.outline")
+                    }
+                    .toggleStyle(.button)
+
+                    if hasBoundary {
+                        Button {
+                            gesture.boundary = nil
+                            drawingBoundary = false
+                        } label: {
+                            Label("Clear Boundary", systemImage: "xmark.circle")
+                        }
+                    }
 
                     if let fingerIndex = gesture.fingers.firstIndex(where: { $0.id == selectedFingerID }) {
                         Picker("Moves", selection: $gesture.fingers[fingerIndex].direction) {
@@ -229,7 +253,10 @@ private struct GestureEditor: View {
 
 private struct FingerCanvas: View {
     @Binding var fingers: [CustomFinger]
+    @Binding var boundary: [BoundaryPoint]?
     @Binding var selectedFingerID: UUID?
+    @Binding var drawingBoundary: Bool
+    @State private var strokeInProgress: [CGPoint] = []
 
     private let fingerColors: [Color] = [.blue, .green, .orange, .pink, .purple]
 
@@ -240,6 +267,8 @@ private struct FingerCanvas: View {
                     .fill(.quaternary.opacity(0.5))
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .strokeBorder(.tertiary, lineWidth: 1)
+
+                boundaryLayer(in: geo.size)
 
                 ForEach(Array(fingers.enumerated()), id: \.element.id) { index, finger in
                     let center = CGPoint(
@@ -279,8 +308,67 @@ private struct FingerCanvas: View {
                                 fingers[i].y = min(max(1 - drag.location.y / geo.size.height, 0.02), 0.98)
                             }
                     )
+                    .allowsHitTesting(!drawingBoundary)
                 }
             }
+            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .gesture(drawingGesture(in: geo.size), including: drawingBoundary ? .all : .none)
+        }
+    }
+
+    // MARK: - Boundary drawing
+
+    private func drawingGesture(in size: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 2)
+            .onChanged { drag in
+                let last = strokeInProgress.last
+                let point = drag.location
+                if last == nil || hypot(point.x - last!.x, point.y - last!.y) > 6 {
+                    strokeInProgress.append(point)
+                }
+            }
+            .onEnded { _ in
+                if strokeInProgress.count >= 3 {
+                    boundary = strokeInProgress.map {
+                        BoundaryPoint(
+                            x: min(max($0.x / size.width, 0), 1),
+                            y: min(max(1 - $0.y / size.height, 0), 1)
+                        )
+                    }
+                }
+                strokeInProgress = []
+                drawingBoundary = false
+            }
+    }
+
+    @ViewBuilder
+    private func boundaryLayer(in size: CGSize) -> some View {
+        if !strokeInProgress.isEmpty {
+            Path { path in
+                path.addLines(strokeInProgress)
+            }
+            .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [6, 4]))
+        } else if let boundary, boundary.count >= 3 {
+            let points = boundary.map {
+                CGPoint(x: $0.x * size.width, y: (1 - $0.y) * size.height)
+            }
+            // Dim everything outside the boundary — that's where the gesture
+            // is NOT detected.
+            Path { path in
+                path.addRect(CGRect(origin: .zero, size: size))
+                path.move(to: points[0])
+                path.addLines(points)
+                path.closeSubpath()
+            }
+            .fill(Color.black.opacity(0.22), style: FillStyle(eoFill: true))
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+            Path { path in
+                path.move(to: points[0])
+                path.addLines(points)
+                path.closeSubpath()
+            }
+            .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, lineCap: .round))
         }
     }
 }

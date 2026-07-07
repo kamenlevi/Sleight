@@ -57,6 +57,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if Permissions.accessibilityGranted {
                     if !EventSuppressor.shared.isRunning {
                         EventSuppressor.shared.start()
+                        // Keep polling until the tap actually exists —
+                        // creation can fail transiently right after a grant.
+                        done = EventSuppressor.shared.isRunning
                     }
                 } else {
                     done = false

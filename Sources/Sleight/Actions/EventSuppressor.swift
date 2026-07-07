@@ -46,6 +46,18 @@ final class EventSuppressor: @unchecked Sendable {
         lock.unlock()
     }
 
+    /// Scroll wheel, the undocumented gesture/dock-gesture types (29/30:
+    /// pinch, rotate, swipe navigation), and pointer movement.
+    private func isInteresting(_ type: CGEventType) -> Bool {
+        switch type {
+        case .scrollWheel, .mouseMoved,
+             .leftMouseDragged, .rightMouseDragged, .otherMouseDragged:
+            return true
+        default:
+            return type.rawValue == 29 || type.rawValue == 30
+        }
+    }
+
     private func shouldSwallow(_ event: CGEvent, type: CGEventType) -> Bool {
         lock.lock()
         defer { lock.unlock() }
@@ -72,14 +84,12 @@ final class EventSuppressor: @unchecked Sendable {
 
     func start() {
         guard tap == nil else { return }
-        // 29 and 30 are the undocumented gesture / dock-gesture event types
-        // (pinch, rotate, swipe navigation).
-        let mask: CGEventMask =
-            (1 << CGEventType.scrollWheel.rawValue) | (1 << 29) | (1 << 30)
-            | (1 << CGEventType.mouseMoved.rawValue)
-            | (1 << CGEventType.leftMouseDragged.rawValue)
-            | (1 << CGEventType.rightMouseDragged.rawValue)
-            | (1 << CGEventType.otherMouseDragged.rawValue)
+        // Listen to ALL events and filter inside the callback. Requesting
+        // the undocumented gesture event types (29/30) in the creation mask
+        // can make tapCreate silently fail on some macOS versions — which
+        // would disable suppression entirely. The catch-all mask cannot fail
+        // that way; the callback below is trivial for uninteresting events.
+        let mask = CGEventMask.max
 
         let callback: CGEventTapCallBack = { _, type, event, _ in
             let suppressor = EventSuppressor.shared
@@ -87,7 +97,7 @@ final class EventSuppressor: @unchecked Sendable {
                 suppressor.reenable()
                 return Unmanaged.passUnretained(event)
             }
-            if suppressor.shouldSwallow(event, type: type) {
+            if suppressor.isInteresting(type), suppressor.shouldSwallow(event, type: type) {
                 return nil
             }
             return Unmanaged.passUnretained(event)

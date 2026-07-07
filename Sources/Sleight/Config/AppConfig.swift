@@ -139,6 +139,11 @@ enum SpeedRequirement: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+struct BoundaryPoint: Codable, Equatable {
+    var x: Double
+    var y: Double
+}
+
 struct CustomFinger: Codable, Equatable, Identifiable {
     var id = UUID()
     /// Landing zone center, normalized trackpad coordinates (y up).
@@ -165,6 +170,15 @@ struct CustomGesture: Codable, Equatable, Identifiable {
     var shellCommand = ""
     var sensitivity: Double = 1.0
     var speed: SpeedRequirement = .any
+    /// Optional drawn outline: when present (3+ points), the gesture is only
+    /// detected if every finger lands inside this polygon. Optional so
+    /// configs saved before this field existed still decode.
+    var boundary: [BoundaryPoint]?
+
+    var summary: String {
+        let what = isContinuous ? control.label : action.label
+        return "\(fingers.count) finger\(fingers.count == 1 ? "" : "s") → \(what)"
+    }
 }
 
 struct TapConfig: Codable, Equatable {

@@ -36,6 +36,7 @@ struct GeneralSettingsView: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var accessibilityOK = Permissions.accessibilityGranted
     @State private var inputMonitoringOK = Permissions.inputMonitoringGranted
+    @State private var suppressorRunning = EventSuppressor.shared.isRunning
 
     private let refresh = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
@@ -82,7 +83,7 @@ struct GeneralSettingsView: View {
             Section("Permissions") {
                 PermissionRow(
                     title: "Input Monitoring",
-                    detail: "Required to read raw finger positions from the trackpad.",
+                    detail: "Required to read raw finger positions from the trackpad. If it shows enabled in System Settings but still reads ✕ here, toggle Sleight off and on in that list.",
                     granted: inputMonitoringOK,
                     request: {
                         Permissions.requestInputMonitoring()
@@ -91,7 +92,7 @@ struct GeneralSettingsView: View {
                 )
                 PermissionRow(
                     title: "Accessibility",
-                    detail: "Stops the system from scrolling while you turn a dial, and enables media-key actions.",
+                    detail: "Stops the system from scrolling while you turn a dial, and enables media-key actions. If it shows enabled in System Settings but still reads ✕ here, toggle Sleight off and on in that list — after an update the old entry no longer counts.",
                     granted: accessibilityOK,
                     request: {
                         Permissions.requestAccessibility()
@@ -105,6 +106,15 @@ struct GeneralSettingsView: View {
                     Text("\(TouchStream.shared.deviceCount)")
                         .foregroundStyle(TouchStream.shared.deviceCount > 0 ? .primary : Color.red)
                 }
+                LabeledContent("Freeze engine") {
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(suppressorRunning ? .green : .red)
+                            .frame(width: 8, height: 8)
+                        Text(suppressorRunning ? "Active" : "Inactive — grant Accessibility")
+                            .foregroundStyle(suppressorRunning ? .primary : Color.red)
+                    }
+                }
             }
         }
         .formStyle(.grouped)
@@ -112,6 +122,7 @@ struct GeneralSettingsView: View {
             accessibilityOK = Permissions.accessibilityGranted
             inputMonitoringOK = Permissions.inputMonitoringGranted
             launchAtLogin = SMAppService.mainApp.status == .enabled
+            suppressorRunning = EventSuppressor.shared.isRunning
         }
     }
 }
@@ -167,6 +178,38 @@ struct GestureSettingsView: View {
             }
             Section {
                 SliderSection(config: $store.config.slider)
+            }
+
+            if store.config.customGestures.contains(where: { $0.enabled }) {
+                Section {
+                    ForEach(store.config.customGestures.filter(\.enabled)) { gesture in
+                        HStack {
+                            Label {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(gesture.name).fontWeight(.medium)
+                                    Text(gesture.summary)
+                                        .font(.footnote)
+                                        .foregroundStyle(.secondary)
+                                }
+                            } icon: {
+                                Image(systemName: gesture.isContinuous
+                                      ? gesture.control.symbol
+                                      : gesture.action.symbol)
+                                    .font(.title3)
+                                    .foregroundStyle(.tint)
+                                    .frame(width: 30)
+                            }
+                            Spacer()
+                            Button("Edit") {
+                                SettingsState.shared.selectedTab = .custom
+                            }
+                            .buttonStyle(.link)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                } header: {
+                    Text("Your Custom Gestures")
+                }
             }
 
             Section {

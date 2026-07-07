@@ -52,14 +52,21 @@ final class GestureEngine {
     // ordinary scrolls; change with care.
     private enum Tuning {
         static let dialStartRotation: Float = 0.10        // ~6 degrees
-        static let dialMaxTranslation: Float = 0.07
+        static let dialMaxTranslation: Float = 0.09
         static let dialMinSpread: Float = 0.05
         // Scrolling moves both fingers in the same direction (cosine ~ +1);
         // dialing moves them in opposing directions (~ -1). Require clearly
         // non-parallel motion before a dial can activate.
-        static let dialMaxParallelism: Float = 0.4
+        static let dialMaxParallelism: Float = 0.55
         static let earlyFreezeRotation: Float = 0.04
         static let earlyFreezeMaxTranslation: Float = 0.05
+        // Dial fingers land spread apart (thumb + index); scroll fingers sit
+        // close together. Wide-spread landings freeze scrolling instantly.
+        static let freezePostureSpread: Float = 0.17
+        // Evidence the frozen candidate is actually a scroll: parallel motion
+        // with no rotation — release the freeze early.
+        static let unfreezeParallelism: Float = 0.6
+        static let unfreezeMinDisplacement: Float = 0.03
         static let scrollFailTranslation: Float = 0.11
         static let scrollFailMaxRotation: Float = 0.06
         static let sliderEdgeStrip: Float = 0.15
@@ -246,6 +253,15 @@ final class GestureEngine {
             setCandidateFreeze(true)
         }
 
+        // Frozen on posture but the motion says plain scroll (parallel, no
+        // rotation): release the freeze so the scroll works with minimal loss.
+        if candidateFrozen,
+           parallelismEMA > Tuning.unfreezeParallelism,
+           maxDisplacement > Tuning.unfreezeMinDisplacement,
+           abs(rotationAccum) < Tuning.earlyFreezeRotation {
+            setCandidateFreeze(false)
+        }
+
         // Clear scroll / swipe: give up until all fingers lift so we never
         // misfire mid-scroll.
         if length(translation) > Tuning.scrollFailTranslation,
@@ -402,11 +418,14 @@ final class GestureEngine {
     }
 
     /// Greedy nearest-match of touches onto a custom gesture's finger zones.
+    /// If the gesture has a drawn boundary, every finger must land inside it.
     private func matchPosture(_ gesture: CustomGesture, touches: [Touch], byStartPoint: Bool) -> [Int32: Int]? {
         var available = Set(gesture.fingers.indices)
         var assignment: [Int32: Int] = [:]
+        let boundary = (gesture.boundary?.count ?? 0) >= 3 ? gesture.boundary : nil
         for touch in touches {
             let point = byStartPoint ? (records[touch.id]?.startPoint ?? touch.point) : touch.point
+            if let boundary, !pointInPolygon(point, boundary) { return nil }
             var best: (index: Int, distance: Float)?
             for index in available {
                 let finger = gesture.fingers[index]
@@ -424,11 +443,22 @@ final class GestureEngine {
     }
 
     /// Does the landing posture match any gesture that can be identified
-    /// from positions alone (slider rails or a custom gesture's zones)?
+    /// from positions alone (slider rails, a custom gesture's zones, or the
+    /// wide finger spread of a dial grip)?
     private func postureMatchesGesture(_ touches: [Touch]) -> Bool {
         if touches.count == 2, config.slider.enabled, config.slider.control != .none,
            let a = records[touches[0].id], let b = records[touches[1].id],
            railsPosture(a.startPoint, b.startPoint) {
+            return true
+        }
+        // A dial grip lands with fingers spread apart (thumb + index);
+        // scrolling fingers sit close together. If the spread posture turns
+        // out to be a scroll after all, the freeze is released as soon as
+        // parallel motion shows up.
+        let dialConfig = touches.count == 2 ? config.twoFingerDial : config.threeFingerDial
+        if (touches.count == 2 || touches.count == 3),
+           dialConfig.enabled, dialConfig.control != .none,
+           spread(of: touches) > Tuning.freezePostureSpread {
             return true
         }
         for gesture in config.customGestures where gesture.enabled && gesture.fingers.count == touches.count {
@@ -579,6 +609,23 @@ final class GestureEngine {
         parallelismEMA = 0
         maxTouchCount = 0
         maxDisplacement = 0
+    }
+
+    /// Ray-casting point-in-polygon test in normalized pad coordinates.
+    private func pointInPolygon(_ point: SIMD2<Float>, _ polygon: [BoundaryPoint]) -> Bool {
+        var inside = false
+        var j = polygon.count - 1
+        for i in 0..<polygon.count {
+            let a = polygon[i], b = polygon[j]
+            let ax = Float(a.x), ay = Float(a.y)
+            let bx = Float(b.x), by = Float(b.y)
+            if (ay > point.y) != (by > point.y),
+               point.x < (bx - ax) * (point.y - ay) / (by - ay) + ax {
+                inside.toggle()
+            }
+            j = i
+        }
+        return inside
     }
 
     // MARK: - Candidate freeze plumbing

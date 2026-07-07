@@ -35,7 +35,10 @@ final class HUDController {
         panel.hasShadow = false
         panel.ignoresMouseEvents = true
         panel.hidesOnDeactivate = false
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        // .moveToActiveSpace (not .canJoinAllSpaces, which macOS doesn't
+        // reliably honor for this panel): every orderFront pulls the HUD onto
+        // the desktop the user is currently on.
+        panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary, .transient]
         panel.contentView = NSHostingView(rootView: HUDView(model: model))
         return panel
     }
