@@ -270,12 +270,21 @@ final class ConfigStore {
     }
 
     private init() {
+        var loaded: SleightConfig
         if let data = UserDefaults.standard.data(forKey: Self.key),
            let decoded = try? JSONDecoder().decode(SleightConfig.self, from: data) {
-            config = decoded
+            loaded = decoded
         } else {
-            config = SleightConfig()
+            loaded = SleightConfig()
         }
+        // Drop accidental duplicates (same combination, same action).
+        var seen = Set<String>()
+        loaded.shortcuts = loaded.shortcuts.filter { shortcut in
+            guard shortcut.isRecorded else { return true }
+            let key = "\(shortcut.keyCode)-\(shortcut.modifiers)-\(shortcut.action.rawValue)"
+            return seen.insert(key).inserted
+        }
+        config = loaded
     }
 
     private func save() {

@@ -13,9 +13,9 @@ struct ShortcutsView: View {
                         .foregroundStyle(.secondary)
                         .font(.callout)
                 }
-                ForEach($store.config.shortcuts) { $binding in
-                    ShortcutRow(binding: $binding) {
-                        store.config.shortcuts.removeAll { $0.id == binding.id }
+                ForEach(store.config.shortcuts) { shortcut in
+                    ShortcutRow(binding: binding(for: shortcut.id)) {
+                        store.config.shortcuts.removeAll { $0.id == shortcut.id }
                     }
                 }
             } header: {
@@ -35,6 +35,21 @@ struct ShortcutsView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    /// Row bindings resolved by ID on every access, so rows keep working
+    /// (and deleting) correctly no matter how the array shifts underneath.
+    private func binding(for id: UUID) -> Binding<ShortcutBinding> {
+        Binding(
+            get: {
+                ConfigStore.shared.config.shortcuts.first { $0.id == id } ?? ShortcutBinding()
+            },
+            set: { newValue in
+                if let index = ConfigStore.shared.config.shortcuts.firstIndex(where: { $0.id == id }) {
+                    ConfigStore.shared.config.shortcuts[index] = newValue
+                }
+            }
+        )
     }
 }
 

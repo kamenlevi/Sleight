@@ -78,6 +78,7 @@ enum Keystrokes {
         }
         let known: [Known] = [
             Known(keyCode: 49, modifiers: cmd, does: "Spotlight"),
+            Known(keyCode: 49, modifiers: opt, does: "typing a non-breaking space in text fields (rarely used)"),
             Known(keyCode: 49, modifiers: cmd | opt, does: "Finder search window"),
             Known(keyCode: 49, modifiers: ctrl, does: "switching input sources"),
             Known(keyCode: 49, modifiers: ctrl | cmd, does: "the Emoji & Symbols picker"),

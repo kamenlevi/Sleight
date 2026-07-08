@@ -88,15 +88,33 @@ final class GestureCoordinator: @unchecked Sendable {
         EventSuppressor.shared.onShortcut = { [weak self] id in
             self?.shortcutPressed(id)
         }
+        HotkeyCenter.shared.onHotkey = { [weak self] id in
+            self?.shortcutPressed(id)
+        }
         pushShortcuts()
         TouchStream.shared.start()
     }
 
+    /// Non-Globe combos register as Carbon hotkeys (no permissions needed);
+    /// Globe(fn) combos can only be caught by the event tap.
     private func pushShortcuts() {
-        let resolved = config.shortcuts
-            .filter { $0.enabled && $0.isRecorded && $0.action != .none }
-            .map { EventSuppressor.ResolvedShortcut(id: $0.id, keyCode: $0.keyCode, modifiers: $0.modifiers) }
-        EventSuppressor.shared.updateShortcuts(resolved)
+        let active = config.shortcuts.filter { $0.enabled && $0.isRecorded && $0.action != .none }
+        let fnCombos = active.filter { $0.modifiers & Keystrokes.fn != 0 }
+        let carbonCombos = active.filter { $0.modifiers & Keystrokes.fn == 0 }
+
+        EventSuppressor.shared.updateShortcuts(fnCombos.map {
+            EventSuppressor.ResolvedShortcut(id: $0.id, keyCode: $0.keyCode, modifiers: $0.modifiers)
+        })
+        let entries = carbonCombos.map {
+            HotkeyCenter.Entry(id: $0.id, keyCode: $0.keyCode, modifiers: $0.modifiers)
+        }
+        if Thread.isMainThread {
+            HotkeyCenter.shared.update(entries)
+        } else {
+            DispatchQueue.main.async {
+                HotkeyCenter.shared.update(entries)
+            }
+        }
     }
 
     private func shortcutPressed(_ id: UUID) {
