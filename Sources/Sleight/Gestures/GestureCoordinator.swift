@@ -169,6 +169,29 @@ final class GestureCoordinator: @unchecked Sendable {
         }
     }
 
+    // MARK: - Keyboard backlight perceptual scale
+
+    /// Piecewise-linear bend through the configured midpoint: logical 0.5
+    /// (what the HUD shows) maps to `keyboardMidpoint` hardware level, since
+    /// hardware 50% doesn't look like half brightness.
+    private var keyboardMid: Float {
+        min(max(Float(config.keyboardMidpoint), 0.01), 0.99)
+    }
+
+    private func keyboardToHardware(_ logical: Float) -> Float {
+        let mid = keyboardMid
+        return logical <= 0.5
+            ? logical / 0.5 * mid
+            : mid + (logical - 0.5) / 0.5 * (1 - mid)
+    }
+
+    private func keyboardToLogical(_ hardware: Float) -> Float {
+        let mid = keyboardMid
+        return hardware <= mid
+            ? hardware / mid * 0.5
+            : 0.5 + (hardware - mid) / (1 - mid) * 0.5
+    }
+
     // MARK: - Continuous gestures
 
     /// A landing posture or early motion looks like a gesture: freeze
@@ -191,7 +214,7 @@ final class GestureCoordinator: @unchecked Sendable {
         case .displayBrightness:
             current = DisplayBrightness.get()
         case .keyboardBrightness:
-            current = KeyboardBacklight.shared.get()
+            current = KeyboardBacklight.shared.get().map(keyboardToLogical)
         case .none:
             current = nil
         }
@@ -220,7 +243,7 @@ final class GestureCoordinator: @unchecked Sendable {
         switch current.control {
         case .volume: SystemVolume.set(current.value)
         case .displayBrightness: displayWriter.submit(current.value)
-        case .keyboardBrightness: keyboardWriter.submit(current.value)
+        case .keyboardBrightness: keyboardWriter.submit(keyboardToHardware(current.value))
         case .none: break
         }
 
@@ -319,9 +342,10 @@ final class GestureCoordinator: @unchecked Sendable {
                 }
             }
         case .keyboardBrightnessCycle:
+            // Logical states; 0.5 lands on the configured perceptual midpoint.
             let states: [Float] = [0, 0.5, 1]
-            let reading = KeyboardBacklight.shared.get()
-            SleightLog.log("cycle backlight: current=\(reading == nil ? "nil" : "\(reading!)")")
+            let reading = KeyboardBacklight.shared.get().map(keyboardToLogical)
+            SleightLog.log("cycle backlight: current(logical)=\(reading == nil ? "nil" : "\(reading!)")")
             guard let current = reading else {
                 if config.showHUD {
                     Task { @MainActor in
@@ -336,7 +360,7 @@ final class GestureCoordinator: @unchecked Sendable {
                 abs($0.element - current) < abs($1.element - current)
             }!.offset
             let next = states[(nearest + 1) % states.count]
-            KeyboardBacklight.shared.set(next)
+            KeyboardBacklight.shared.set(keyboardToHardware(next))
             if config.showHUD {
                 Task { @MainActor in
                     HUDController.shared.show(control: .keyboardBrightness, value: next, available: true)

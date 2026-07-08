@@ -116,6 +116,26 @@ struct GeneralSettingsView: View {
             }
 
             Section {
+                HStack {
+                    Text("Level that counts as 50%")
+                    Slider(value: $store.config.keyboardMidpoint, in: 0.05...0.95)
+                    Text(store.config.keyboardMidpoint, format: .percent.precision(.fractionLength(0)))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .frame(width: 42, alignment: .trailing)
+                }
+                Button("Preview this level") {
+                    KeyboardBacklight.shared.set(Float(store.config.keyboardMidpoint))
+                }
+            } header: {
+                Text("Keyboard Backlight")
+            } footer: {
+                Text("Backlight LEDs aren't perceptually linear — the hardware's 50% looks nearly full. Pick the level that looks like half brightness to you; Sleight's gestures and HUD treat it as 50%.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
                 Toggle("Install updates automatically when the Mac wakes", isOn: $store.config.autoUpdate)
                 LabeledContent("Version") {
                     Text(Updater.currentVersion)
