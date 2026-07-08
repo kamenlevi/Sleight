@@ -44,17 +44,8 @@ struct HUDView: View {
         }
         .padding(.horizontal, 22)
         .frame(width: 280, height: 58)
-        // Regular (not ultra-thin) material: over a bright, busy desktop the
-        // thin material let the background wash out the text in light mode.
-        .background(.regularMaterial, in: Capsule(style: .continuous))
-        .overlay(
-            // .primary adapts: hairline is visible in both light and dark
-            // mode (a white border disappears on the light material).
-            Capsule(style: .continuous)
-                .strokeBorder(.primary.opacity(0.1), lineWidth: 0.5)
-        )
-        .shadow(color: .black.opacity(0.25), radius: 18, y: 6)
-        .padding(3)
+        // No background here: the capsule bezel is a native masked
+        // NSVisualEffectView behind this view (see HUDController.makePanel).
     }
 }
 

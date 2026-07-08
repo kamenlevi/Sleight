@@ -27,8 +27,9 @@ final class HUDController {
     private init() {}
 
     private func makePanel() -> NSPanel {
+        let size = NSSize(width: 280, height: 58)
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 280, height: 64),
+            contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -36,16 +37,53 @@ final class HUDController {
         panel.level = .statusBar
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = false
+        panel.hasShadow = true
         panel.ignoresMouseEvents = true
         panel.hidesOnDeactivate = false
         // .moveToActiveSpace (not .canJoinAllSpaces, which macOS doesn't
         // reliably honor for this panel): every orderFront pulls the HUD onto
         // the desktop the user is currently on.
         panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary, .transient]
-        panel.contentView = NSHostingView(rootView: HUDView(model: model))
+
+        // The bezel background is a native visual-effect view masked to a
+        // capsule — the same construction as the system volume HUD. SwiftUI
+        // materials render their glass backing against the window's
+        // rectangular bounds on current macOS, which showed as a boxy
+        // outline around the capsule.
+        let container = NSView(frame: NSRect(origin: .zero, size: size))
+        let effect = NSVisualEffectView(frame: container.bounds)
+        effect.autoresizingMask = [.width, .height]
+        effect.material = .hudWindow
+        effect.blendingMode = .behindWindow
+        effect.state = .active
+        effect.maskImage = Self.capsuleMask(size: size)
+        container.addSubview(effect)
+
+        let hosting = NSHostingView(rootView: HUDView(model: model))
+        hosting.frame = container.bounds
+        hosting.autoresizingMask = [.width, .height]
+        container.addSubview(hosting)
+
+        panel.contentView = container
         panel.alphaValue = 0
         return panel
+    }
+
+    private static func capsuleMask(size: NSSize) -> NSImage {
+        let image = NSImage(size: size, flipped: false) { rect in
+            NSColor.black.setFill()
+            NSBezierPath(
+                roundedRect: rect,
+                xRadius: rect.height / 2,
+                yRadius: rect.height / 2
+            ).fill()
+            return true
+        }
+        image.capInsets = NSEdgeInsets(
+            top: size.height / 2, left: size.height / 2,
+            bottom: size.height / 2, right: size.height / 2
+        )
+        return image
     }
 
     func show(control: ContinuousControl, value: Float, available: Bool, muted: Bool = false) {
