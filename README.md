@@ -41,12 +41,17 @@ Requires macOS 14+ and the Xcode Command Line Tools (`xcode-select --install`).
 ```sh
 git clone https://github.com/kamenlevi/Sleight.git
 cd Sleight
+./scripts/make-identity.sh     # once per machine — keeps permissions across updates
 swift scripts/makeicon.swift
 iconutil -c icns assets/AppIcon.iconset -o assets/AppIcon.icns
 ./scripts/build-app.sh
 cp -R build/Sleight.app /Applications/
 open /Applications/Sleight.app
 ```
+
+`make-identity.sh` creates a local signing certificate so macOS treats every
+build of Sleight as the same app — without it, Accessibility and Input
+Monitoring grants reset on every update.
 
 On first launch, grant the two permissions Sleight asks for:
 
@@ -74,13 +79,25 @@ oppose each other (≈ −1), so scrolls can't misfire a dial no matter how
 sloppy the arc. Sliders are distinguished by their starting posture at the
 pad edges, which scrolling never uses.
 
+## Updating
+
+Sleight updates itself: it checks GitHub Releases twice a day, downloads new
+versions quietly, and installs them the next time your Mac wakes from sleep
+(or immediately via the menu bar / Settings → General). Toggleable in
+Settings.
+
+To update manually from source at any time:
+
+```sh
+cd Sleight && ./scripts/update.sh
+```
+
 ## Notes
 
-- Ad-hoc signed builds get a fresh identity each rebuild, so permissions must
-  be re-granted after updating. Important: System Settings may still show
-  Sleight as enabled while silently denying the new binary — toggle Sleight
-  off and on in both permission lists. The General tab shows the live truth,
-  including a "Freeze engine" status light.
+- If a permission shows enabled in System Settings but Sleight's General tab
+  says ✕, the entry is stale — click "Repair Permissions" in the General tab
+  (or toggle Sleight off and on in the System Settings list). With the local
+  signing identity this should only ever be needed once.
 - If a gesture feels too fast or slow, tune its sensitivity in
   Settings → Gestures.
 

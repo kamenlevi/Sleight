@@ -223,13 +223,15 @@ struct SleightConfig: Codable, Equatable {
     var freezeScreen = true
     /// Additionally pin the pointer in place while a gesture is active.
     var freezePointer = false
+    /// Install downloaded updates automatically when the Mac wakes.
+    var autoUpdate = true
     var enabled = true
 
     enum CodingKeys: String, CodingKey {
         case twoFingerDial, threeFingerDial, slider
         case threeFingerTap, fourFingerTap, fiveFingerTap
         case customGestures, shortcuts
-        case hapticDetents, showHUD, freezeScreen, freezePointer, enabled
+        case hapticDetents, showHUD, freezeScreen, freezePointer, autoUpdate, enabled
     }
 }
 
@@ -251,6 +253,7 @@ extension SleightConfig {
         showHUD = (try? c.decodeIfPresent(Bool.self, forKey: .showHUD)) ?? nil ?? defaults.showHUD
         freezeScreen = (try? c.decodeIfPresent(Bool.self, forKey: .freezeScreen)) ?? nil ?? defaults.freezeScreen
         freezePointer = (try? c.decodeIfPresent(Bool.self, forKey: .freezePointer)) ?? nil ?? defaults.freezePointer
+        autoUpdate = (try? c.decodeIfPresent(Bool.self, forKey: .autoUpdate)) ?? nil ?? defaults.autoUpdate
         enabled = (try? c.decodeIfPresent(Bool.self, forKey: .enabled)) ?? nil ?? defaults.enabled
     }
 }

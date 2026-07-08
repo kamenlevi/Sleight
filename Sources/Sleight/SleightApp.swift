@@ -5,6 +5,8 @@ struct SleightApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var store = ConfigStore.shared
 
+    @State private var updater = Updater.shared
+
     var body: some Scene {
         MenuBarExtra {
             Toggle("Enabled", isOn: $store.config.enabled)
@@ -15,6 +17,12 @@ struct SleightApp: App {
             .keyboardShortcut(",")
             Button("Trackpad Visualizer") {
                 SettingsWindow.show(tab: .visualizer)
+            }
+            if case .staged(let version) = updater.state {
+                Divider()
+                Button("Restart to Update to \(version)") {
+                    updater.applyStagedUpdate()
+                }
             }
             Divider()
             Button("Quit Sleight") {
@@ -50,6 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if Permissions.accessibilityGranted {
             EventSuppressor.shared.start()
         }
+        Updater.shared.start()
 
         // Once permissions land, restart the touch stream (grants don't apply
         // retroactively to already-started devices) and bring up the tap.

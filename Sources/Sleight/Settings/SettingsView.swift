@@ -95,13 +95,34 @@ struct GeneralSettingsView: View {
                 )
                 PermissionRow(
                     title: "Accessibility",
-                    detail: "Stops the system from scrolling while you turn a dial, and enables media-key actions. If it shows enabled in System Settings but still reads ✕ here, toggle Sleight off and on in that list — after an update the old entry no longer counts.",
+                    detail: "Stops the system from scrolling while you turn a dial, and enables media-key actions.",
                     granted: accessibilityOK,
                     request: {
                         Permissions.requestAccessibility()
                         Permissions.openAccessibilitySettings()
                     }
                 )
+                if !accessibilityOK || !inputMonitoringOK {
+                    HStack {
+                        Text("Granted it but still shows ✕? The old entry went stale — repair deletes it and asks fresh.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Repair Permissions") {
+                            Permissions.repair()
+                        }
+                    }
+                }
+            }
+
+            Section {
+                Toggle("Install updates automatically when the Mac wakes", isOn: $store.config.autoUpdate)
+                LabeledContent("Version") {
+                    Text(Updater.currentVersion)
+                }
+                UpdateStatusRow()
+            } header: {
+                Text("Updates")
             }
 
             Section("Trackpad") {
@@ -127,6 +148,46 @@ struct GeneralSettingsView: View {
             launchAtLogin = SMAppService.mainApp.status == .enabled
             suppressorRunning = EventSuppressor.shared.isRunning
         }
+    }
+}
+
+private struct UpdateStatusRow: View {
+    @State private var updater = Updater.shared
+
+    var body: some View {
+        HStack {
+            switch updater.state {
+            case .idle:
+                Text("Updates are checked twice a day.")
+                    .foregroundStyle(.secondary)
+            case .checking:
+                Text("Checking…").foregroundStyle(.secondary)
+            case .upToDate:
+                Text("You're on the latest version.")
+                    .foregroundStyle(.secondary)
+            case .downloading(let version):
+                Text("Downloading \(version)…").foregroundStyle(.secondary)
+            case .staged(let version):
+                Text("\(version) ready — installs on next wake.")
+                    .foregroundStyle(.green)
+            case .failed(let message):
+                Text("Check failed: \(message)")
+                    .foregroundStyle(.orange)
+                    .lineLimit(2)
+            }
+            Spacer()
+            if case .staged = updater.state {
+                Button("Restart to Update") {
+                    updater.applyStagedUpdate()
+                }
+            } else {
+                Button("Check Now") {
+                    Task { await updater.check() }
+                }
+                .disabled(updater.state == .checking)
+            }
+        }
+        .font(.callout)
     }
 }
 

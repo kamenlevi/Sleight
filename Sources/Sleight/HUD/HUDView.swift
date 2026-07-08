@@ -34,7 +34,7 @@ struct HUDView: View {
                 Text(Double(model.value), format: .percent.precision(.fractionLength(0)))
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
                     .monospacedDigit()
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary.opacity(0.8))
                     .frame(width: 42, alignment: .trailing)
             } else {
                 Text("Not available")
@@ -45,7 +45,9 @@ struct HUDView: View {
         }
         .padding(.horizontal, 22)
         .frame(width: 280, height: 58)
-        .background(.ultraThinMaterial, in: Capsule(style: .continuous))
+        // Regular (not ultra-thin) material: over a bright, busy desktop the
+        // thin material let the background wash out the text in light mode.
+        .background(.regularMaterial, in: Capsule(style: .continuous))
         .overlay(
             // .primary adapts: hairline is visible in both light and dark
             // mode (a white border disappears on the light material).
@@ -64,7 +66,7 @@ private struct LevelBar: View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(.quaternary)
+                    .fill(.primary.opacity(0.15))
                 Capsule()
                     .fill(.primary)
                     .frame(width: max(geo.size.height, geo.size.width * value))
