@@ -100,6 +100,7 @@ final class GestureCoordinator: @unchecked Sendable {
     /// Accessibility, sees everything). Whichever fires first wins;
     /// duplicates within the dedupe window are dropped.
     private func pushShortcuts() {
+        lastPushedShortcuts = config.shortcuts
         let active = config.shortcuts.filter { $0.enabled && $0.isRecorded && $0.action != .none }
 
         EventSuppressor.shared.updateShortcuts(active.map {
@@ -153,12 +154,19 @@ final class GestureCoordinator: @unchecked Sendable {
 
     /// Called on the main actor by ConfigStore; engines read config at frame
     /// granularity so plain assignment is fine.
+    private var lastPushedShortcuts: [ShortcutBinding] = []
+
     func configChanged(_ newConfig: SleightConfig) {
         config = newConfig
         for engine in engines.values {
             engine.config = newConfig
         }
-        pushShortcuts()
+        // Re-registering hotkeys is main-thread Carbon work; skip it unless
+        // the shortcuts themselves changed (config mutates on every slider
+        // tick in settings).
+        if newConfig.shortcuts != lastPushedShortcuts {
+            pushShortcuts()
+        }
     }
 
     // MARK: - Continuous gestures

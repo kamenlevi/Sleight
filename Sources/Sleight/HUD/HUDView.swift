@@ -47,8 +47,10 @@ struct HUDView: View {
         .frame(width: 280, height: 58)
         .background(.ultraThinMaterial, in: Capsule(style: .continuous))
         .overlay(
+            // .primary adapts: hairline is visible in both light and dark
+            // mode (a white border disappears on the light material).
             Capsule(style: .continuous)
-                .strokeBorder(.white.opacity(0.12), lineWidth: 0.5)
+                .strokeBorder(.primary.opacity(0.1), lineWidth: 0.5)
         )
         .shadow(color: .black.opacity(0.25), radius: 18, y: 6)
         .padding(3)

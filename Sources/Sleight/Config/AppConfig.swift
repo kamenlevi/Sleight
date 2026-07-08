@@ -264,10 +264,13 @@ final class ConfigStore {
 
     var config: SleightConfig {
         didSet {
-            save()
+            guard config != oldValue else { return }
+            scheduleSave()
             GestureCoordinator.shared.configChanged(config)
         }
     }
+
+    private var pendingSave: DispatchWorkItem?
 
     private init() {
         var loaded: SleightConfig
@@ -287,9 +290,17 @@ final class ConfigStore {
         config = loaded
     }
 
-    private func save() {
-        if let data = try? JSONEncoder().encode(config) {
-            UserDefaults.standard.set(data, forKey: Self.key)
+    /// Slider drags mutate config dozens of times per second; encode and
+    /// write to disk only once things settle.
+    private func scheduleSave() {
+        pendingSave?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            if let data = try? JSONEncoder().encode(self.config) {
+                UserDefaults.standard.set(data, forKey: Self.key)
+            }
         }
+        pendingSave = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
     }
 }
