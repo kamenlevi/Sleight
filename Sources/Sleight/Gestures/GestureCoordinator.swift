@@ -95,19 +95,19 @@ final class GestureCoordinator: @unchecked Sendable {
         TouchStream.shared.start()
     }
 
-    /// Non-Globe combos register as Carbon hotkeys (no permissions needed);
-    /// Globe(fn) combos can only be caught by the event tap.
+    /// Every shortcut is armed on BOTH paths: Carbon hotkeys (no permissions
+    /// needed, but can't express Globe combos) and the event tap (needs
+    /// Accessibility, sees everything). Whichever fires first wins;
+    /// duplicates within the dedupe window are dropped.
     private func pushShortcuts() {
         let active = config.shortcuts.filter { $0.enabled && $0.isRecorded && $0.action != .none }
-        let fnCombos = active.filter { $0.modifiers & Keystrokes.fn != 0 }
-        let carbonCombos = active.filter { $0.modifiers & Keystrokes.fn == 0 }
 
-        EventSuppressor.shared.updateShortcuts(fnCombos.map {
+        EventSuppressor.shared.updateShortcuts(active.map {
             EventSuppressor.ResolvedShortcut(id: $0.id, keyCode: $0.keyCode, modifiers: $0.modifiers)
         })
-        let entries = carbonCombos.map {
-            HotkeyCenter.Entry(id: $0.id, keyCode: $0.keyCode, modifiers: $0.modifiers)
-        }
+        let entries = active
+            .filter { $0.modifiers & Keystrokes.fn == 0 }
+            .map { HotkeyCenter.Entry(id: $0.id, keyCode: $0.keyCode, modifiers: $0.modifiers) }
         if Thread.isMainThread {
             HotkeyCenter.shared.update(entries)
         } else {
@@ -117,9 +117,20 @@ final class GestureCoordinator: @unchecked Sendable {
         }
     }
 
+    private var lastShortcutFire: [UUID: Double] = [:]
+
     private func shortcutPressed(_ id: UUID) {
+        let now = CFAbsoluteTimeGetCurrent()
+        if let last = lastShortcutFire[id], now - last < 0.15 {
+            return // the other path already handled this press
+        }
+        lastShortcutFire[id] = now
         guard config.enabled,
-              let binding = config.shortcuts.first(where: { $0.id == id }) else { return }
+              let binding = config.shortcuts.first(where: { $0.id == id }) else {
+            SleightLog.log("shortcut fired but no matching enabled binding (id \(id))")
+            return
+        }
+        SleightLog.log("shortcut executing action \(binding.action.rawValue)")
         performDiscrete(action: binding.action, appPath: binding.appPath, shellCommand: binding.shellCommand)
     }
 
@@ -301,7 +312,9 @@ final class GestureCoordinator: @unchecked Sendable {
             }
         case .keyboardBrightnessCycle:
             let states: [Float] = [0, 0.5, 1]
-            guard let current = KeyboardBacklight.shared.get() else {
+            let reading = KeyboardBacklight.shared.get()
+            SleightLog.log("cycle backlight: current=\(reading == nil ? "nil" : "\(reading!)")")
+            guard let current = reading else {
                 if config.showHUD {
                     Task { @MainActor in
                         HUDController.shared.show(control: .keyboardBrightness, value: 0, available: false)

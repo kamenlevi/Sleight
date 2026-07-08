@@ -37,6 +37,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let firstLaunch = !UserDefaults.standard.bool(forKey: "com.kamenlevi.sleight.launchedBefore")
         UserDefaults.standard.set(true, forKey: "com.kamenlevi.sleight.launchedBefore")
 
+        SleightLog.log("launch: accessibility=\(Permissions.accessibilityGranted) inputMonitoring=\(Permissions.inputMonitoringGranted) multitouch=\(MultitouchBridge.isAvailable)")
+
         if !Permissions.inputMonitoringGranted {
             Permissions.requestInputMonitoring()
         }

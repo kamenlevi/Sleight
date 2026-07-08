@@ -61,6 +61,7 @@ final class EventSuppressor: @unchecked Sendable {
         }
         if event.getIntegerValueField(.keyboardEventAutorepeat) == 0, let onShortcut {
             let id = match.id
+            SleightLog.log("shortcut fired via event tap (keyCode \(keyCode))")
             DispatchQueue.global(qos: .userInteractive).async {
                 onShortcut(id)
             }
@@ -151,7 +152,11 @@ final class EventSuppressor: @unchecked Sendable {
             eventsOfInterest: mask,
             callback: callback,
             userInfo: nil
-        ) else { return }
+        ) else {
+            SleightLog.log("event tap creation FAILED (Accessibility not effective)")
+            return
+        }
+        SleightLog.log("event tap created")
 
         self.tap = tap
         let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
