@@ -35,6 +35,16 @@ final class Updater {
     private init() {}
 
     func start() {
+        // An update staged in a previous run (e.g. quit before the Mac ever
+        // slept) applies right away at launch.
+        if let staged = stagedVersion(), Self.isVersion(staged, newerThan: Self.currentVersion) {
+            SleightLog.log("updater: applying \(staged) staged in a previous run")
+            state = .staged(staged)
+            applyStagedUpdate()
+            return
+        }
+        try? FileManager.default.removeItem(at: stagingDir)
+
         // First check shortly after launch, then twice a day.
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(15))
@@ -134,6 +144,15 @@ final class Updater {
         process.arguments = ["-c", script]
         try? process.run()
         NSApp.terminate(nil)
+    }
+
+    private func stagedVersion() -> String? {
+        let plist = stagedAppURL.appendingPathComponent("Contents/Info.plist")
+        guard let data = try? Data(contentsOf: plist),
+              let dict = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any] else {
+            return nil
+        }
+        return dict["CFBundleShortVersionString"] as? String
     }
 
     /// Semver-ish comparison: "1.10.0" > "1.9.1".

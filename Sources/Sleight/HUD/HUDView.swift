@@ -25,7 +25,6 @@ struct HUDView: View {
                 .font(.system(size: 20, weight: .medium))
                 .foregroundStyle(.primary)
                 .frame(width: 28)
-                .contentTransition(.symbolEffect(.replace))
 
             if model.available {
                 LevelBar(value: CGFloat(model.value))
@@ -66,7 +65,7 @@ private struct LevelBar: View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(.primary.opacity(0.15))
+                    .fill(.quaternary)
                 Capsule()
                     .fill(.primary)
                     .frame(width: max(geo.size.height, geo.size.width * value))

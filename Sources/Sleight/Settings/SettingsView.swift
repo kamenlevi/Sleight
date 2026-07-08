@@ -443,7 +443,7 @@ struct AboutView: View {
                 .font(.system(size: 28, weight: .bold, design: .rounded))
             Text("Turn your Magic Trackpad into a control surface.")
                 .foregroundStyle(.secondary)
-            Text("Version 1.0")
+            Text("Version \(Updater.currentVersion)")
                 .font(.footnote)
                 .foregroundStyle(.tertiary)
             Link("github.com/kamenlevi/Sleight",
