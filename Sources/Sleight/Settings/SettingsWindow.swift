@@ -38,6 +38,7 @@ enum SettingsTab: String {
     case general
     case gestures
     case custom
+    case shortcuts
     case visualizer
     case about
 }

@@ -21,14 +21,52 @@ final class EventSuppressor: @unchecked Sendable {
         case gesture
     }
 
+    struct ResolvedShortcut {
+        let id: UUID
+        let keyCode: Int
+        let modifiers: Int
+    }
+
     private let lock = NSLock()
     private var level: Level = .off
     private var pointerFrozen = false
     private var swallowMomentumUntil: Double = 0
+    private var shortcuts: [ResolvedShortcut] = []
+
+    /// Fired (off the tap thread) when a registered shortcut is pressed.
+    var onShortcut: (@Sendable (UUID) -> Void)?
 
     private var tap: CFMachPort?
 
     private init() {}
+
+    func updateShortcuts(_ newShortcuts: [ResolvedShortcut]) {
+        lock.lock()
+        shortcuts = newShortcuts
+        lock.unlock()
+    }
+
+    /// Returns true when the key event belongs to a registered shortcut and
+    /// must be swallowed. Fires the action on the initial press (not repeats).
+    private func handleKeyDown(_ event: CGEvent) -> Bool {
+        lock.lock()
+        let current = shortcuts
+        lock.unlock()
+        guard !current.isEmpty else { return false }
+
+        let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
+        let modifiers = Keystrokes.canonical(event.flags, keyCode: keyCode)
+        guard let match = current.first(where: { $0.keyCode == keyCode && $0.modifiers == modifiers }) else {
+            return false
+        }
+        if event.getIntegerValueField(.keyboardEventAutorepeat) == 0, let onShortcut {
+            let id = match.id
+            DispatchQueue.global(qos: .userInteractive).async {
+                onShortcut(id)
+            }
+        }
+        return true
+    }
 
     func setLevel(_ newLevel: Level) {
         lock.lock()
@@ -96,6 +134,9 @@ final class EventSuppressor: @unchecked Sendable {
             if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
                 suppressor.reenable()
                 return Unmanaged.passUnretained(event)
+            }
+            if type == .keyDown, suppressor.handleKeyDown(event) {
+                return nil
             }
             if suppressor.isInteresting(type), suppressor.shouldSwallow(event, type: type) {
                 return nil

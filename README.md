@@ -15,10 +15,13 @@ Free, open source, and fully native (Swift + SwiftUI, no dependencies).
 | **Edge Slider** | One finger on the top edge, one on the bottom (same spot horizontally), sweep both sideways together | Keyboard backlight |
 | **Custom gestures** | Design your own in Settings → Custom: place finger zones on the pad, give each a direction or keep it stationary, draw a boundary where the gesture may start, choose speed and what it controls |  |
 | **3 / 4 / 5-finger tap** | Quick tap | Configurable |
+| **Keyboard shortcuts** | Bind any combination (e.g. 🌐Space) to a Sleight action, with warnings about which macOS function you'd be giving up |  |
 
 Every continuous gesture can be remapped to volume, display brightness, or
 keyboard backlight, with per-gesture sensitivity and direction. Taps can
-play/pause, skip tracks, mute, launch an app, or run a shell command.
+play/pause, skip tracks, mute, cycle the keyboard backlight through
+off · mid · max, launch an app, or run a shell command — and all of those can
+also be bound to global keyboard shortcuts in Settings → Shortcuts.
 
 Details that make it feel native:
 

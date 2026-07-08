@@ -29,13 +29,14 @@ enum ContinuousControl: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-/// What a discrete (tap) gesture triggers.
+/// What a discrete (tap / shortcut) gesture triggers.
 enum DiscreteAction: String, Codable, CaseIterable, Identifiable {
     case none
     case playPause
     case nextTrack
     case previousTrack
     case muteToggle
+    case keyboardBrightnessCycle
     case launchApp
     case shellCommand
 
@@ -48,6 +49,7 @@ enum DiscreteAction: String, Codable, CaseIterable, Identifiable {
         case .nextTrack: "Next Track"
         case .previousTrack: "Previous Track"
         case .muteToggle: "Mute / Unmute"
+        case .keyboardBrightnessCycle: "Cycle Keyboard Backlight (off · mid · max)"
         case .launchApp: "Launch App…"
         case .shellCommand: "Run Shell Command…"
         }
@@ -60,10 +62,27 @@ enum DiscreteAction: String, Codable, CaseIterable, Identifiable {
         case .nextTrack: "forward.fill"
         case .previousTrack: "backward.fill"
         case .muteToggle: "speaker.slash.fill"
+        case .keyboardBrightnessCycle: "light.max"
         case .launchApp: "app.badge.checkmark"
         case .shellCommand: "terminal.fill"
         }
     }
+}
+
+/// A global keyboard shortcut bound to a Sleight action. Captured by the
+/// event tap before any app sees it.
+struct ShortcutBinding: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var enabled = true
+    /// -1 until the user records a combination.
+    var keyCode: Int = -1
+    /// Canonical Keystrokes modifier bits.
+    var modifiers: Int = 0
+    var action: DiscreteAction = .keyboardBrightnessCycle
+    var appPath = ""
+    var shellCommand = ""
+
+    var isRecorded: Bool { keyCode >= 0 }
 }
 
 struct DialConfig: Codable, Equatable {
@@ -195,6 +214,7 @@ struct SleightConfig: Codable, Equatable {
     var fourFingerTap = TapConfig()
     var fiveFingerTap = TapConfig()
     var customGestures: [CustomGesture] = []
+    var shortcuts: [ShortcutBinding] = []
     var hapticDetents = true
     var showHUD = true
     /// Swallow scroll/swipe input the moment a gesture posture is detected,
@@ -208,7 +228,7 @@ struct SleightConfig: Codable, Equatable {
     enum CodingKeys: String, CodingKey {
         case twoFingerDial, threeFingerDial, slider
         case threeFingerTap, fourFingerTap, fiveFingerTap
-        case customGestures
+        case customGestures, shortcuts
         case hapticDetents, showHUD, freezeScreen, freezePointer, enabled
     }
 }
@@ -226,6 +246,7 @@ extension SleightConfig {
         fourFingerTap = (try? c.decodeIfPresent(TapConfig.self, forKey: .fourFingerTap)) ?? nil ?? defaults.fourFingerTap
         fiveFingerTap = (try? c.decodeIfPresent(TapConfig.self, forKey: .fiveFingerTap)) ?? nil ?? defaults.fiveFingerTap
         customGestures = (try? c.decodeIfPresent([CustomGesture].self, forKey: .customGestures)) ?? nil ?? defaults.customGestures
+        shortcuts = (try? c.decodeIfPresent([ShortcutBinding].self, forKey: .shortcuts)) ?? nil ?? defaults.shortcuts
         hapticDetents = (try? c.decodeIfPresent(Bool.self, forKey: .hapticDetents)) ?? nil ?? defaults.hapticDetents
         showHUD = (try? c.decodeIfPresent(Bool.self, forKey: .showHUD)) ?? nil ?? defaults.showHUD
         freezeScreen = (try? c.decodeIfPresent(Bool.self, forKey: .freezeScreen)) ?? nil ?? defaults.freezeScreen

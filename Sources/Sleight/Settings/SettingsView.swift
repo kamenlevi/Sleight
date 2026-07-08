@@ -18,6 +18,9 @@ struct SettingsView: View {
             CustomGesturesView()
                 .tabItem { Label("Custom", systemImage: "wand.and.stars") }
                 .tag(SettingsTab.custom)
+            ShortcutsView()
+                .tabItem { Label("Shortcuts", systemImage: "command") }
+                .tag(SettingsTab.shortcuts)
             VisualizerView()
                 .tabItem { Label("Visualizer", systemImage: "dot.circle.and.hand.point.up.left.fill") }
                 .tag(SettingsTab.visualizer)

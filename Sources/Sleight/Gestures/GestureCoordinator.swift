@@ -85,7 +85,24 @@ final class GestureCoordinator: @unchecked Sendable {
         TouchStream.shared.onFrame = { [weak self] frame in
             self?.handle(frame)
         }
+        EventSuppressor.shared.onShortcut = { [weak self] id in
+            self?.shortcutPressed(id)
+        }
+        pushShortcuts()
         TouchStream.shared.start()
+    }
+
+    private func pushShortcuts() {
+        let resolved = config.shortcuts
+            .filter { $0.enabled && $0.isRecorded && $0.action != .none }
+            .map { EventSuppressor.ResolvedShortcut(id: $0.id, keyCode: $0.keyCode, modifiers: $0.modifiers) }
+        EventSuppressor.shared.updateShortcuts(resolved)
+    }
+
+    private func shortcutPressed(_ id: UUID) {
+        guard config.enabled,
+              let binding = config.shortcuts.first(where: { $0.id == id }) else { return }
+        performDiscrete(action: binding.action, appPath: binding.appPath, shellCommand: binding.shellCommand)
     }
 
     func handle(_ frame: TouchFrame) {
@@ -112,6 +129,7 @@ final class GestureCoordinator: @unchecked Sendable {
         for engine in engines.values {
             engine.config = newConfig
         }
+        pushShortcuts()
     }
 
     // MARK: - Continuous gestures
@@ -260,6 +278,29 @@ final class GestureCoordinator: @unchecked Sendable {
                         available: true,
                         muted: nowMuted
                     )
+                    HUDController.shared.scheduleHide()
+                }
+            }
+        case .keyboardBrightnessCycle:
+            let states: [Float] = [0, 0.5, 1]
+            guard let current = KeyboardBacklight.shared.get() else {
+                if config.showHUD {
+                    Task { @MainActor in
+                        HUDController.shared.show(control: .keyboardBrightness, value: 0, available: false)
+                        HUDController.shared.scheduleHide()
+                    }
+                }
+                return
+            }
+            // Jump to whichever of off/mid/max comes after the nearest state.
+            let nearest = states.enumerated().min {
+                abs($0.element - current) < abs($1.element - current)
+            }!.offset
+            let next = states[(nearest + 1) % states.count]
+            KeyboardBacklight.shared.set(next)
+            if config.showHUD {
+                Task { @MainActor in
+                    HUDController.shared.show(control: .keyboardBrightness, value: next, available: true)
                     HUDController.shared.scheduleHide()
                 }
             }
