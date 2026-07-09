@@ -42,6 +42,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Menu-bar-only even when running unbundled during development.
         NSApp.setActivationPolicy(.accessory)
 
+        // Launched straight from the unzipped download, macOS runs the app
+        // from a read-only translocation mount where self-update can never
+        // work and permission grants don't stick. Move to Applications and
+        // relaunch from there before doing anything else.
+        if Updater.repairInstallLocationIfNeeded() { return }
+
         let firstLaunch = !UserDefaults.standard.bool(forKey: "com.kamenlevi.sleight.launchedBefore")
         UserDefaults.standard.set(true, forKey: "com.kamenlevi.sleight.launchedBefore")
 
@@ -64,6 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             EventSuppressor.shared.start()
         }
         Updater.shared.start()
+        AutomationScheduler.shared.start()
 
         // Bring subsystems up as permissions become effective, without ever
         // prompting. Grants don't apply retroactively to already-started
