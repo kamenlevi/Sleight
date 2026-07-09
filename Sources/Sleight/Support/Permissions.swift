@@ -17,8 +17,29 @@ enum Permissions {
         return AXIsProcessTrustedWithOptions(options)
     }
 
-    static var inputMonitoringGranted: Bool {
+    /// What IOHIDCheckAccess claims. Unreliable on its own — it reports
+    /// denied even while touch frames are flowing — so prefer
+    /// `inputMonitoringWorking` for anything user-facing.
+    static var inputMonitoringReportedGranted: Bool {
         IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted
+    }
+
+    private static let rememberedKey = "com.kamenlevi.sleight.inputMonitoringConfirmed"
+
+    /// True if Input Monitoring is actually functional: either the API says
+    /// so, or we've received real touch data (proof it works), or we
+    /// confirmed it on a previous run. Once confirmed it's remembered, so a
+    /// transient API lie never demotes a working install.
+    static var inputMonitoringWorking: Bool {
+        if TouchStream.shared.hasReceivedTouchData {
+            UserDefaults.standard.set(true, forKey: rememberedKey)
+            return true
+        }
+        if inputMonitoringReportedGranted {
+            UserDefaults.standard.set(true, forKey: rememberedKey)
+            return true
+        }
+        return UserDefaults.standard.bool(forKey: rememberedKey)
     }
 
     static func requestInputMonitoring() {
@@ -50,6 +71,7 @@ enum Permissions {
             try? process.run()
             process.waitUntilExit()
         }
+        UserDefaults.standard.removeObject(forKey: rememberedKey)
         SleightLog.log("permissions repaired via tccutil; re-requesting")
         requestInputMonitoring()
         requestAccessibility()

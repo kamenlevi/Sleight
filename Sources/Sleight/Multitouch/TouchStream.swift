@@ -32,6 +32,29 @@ final class TouchStream {
     /// started; a grant does not apply retroactively, so the app restarts
     /// the stream when this flips.
     private(set) var startedWithInputMonitoring = false
+
+    // Timestamp (CFAbsoluteTime) of the most recent real touch frame. Used
+    // as a FUNCTIONAL signal that Input Monitoring is granted — Apple's
+    // IOHIDCheckAccess lies (reports denied while data flows), so "are frames
+    // actually arriving?" is the reliable question.
+    private let frameLock = NSLock()
+    private var lastFrameTime: Double = 0
+    private var everReceivedFrame = false
+
+    /// True once we've ever seen a touch frame — proof Input Monitoring works
+    /// regardless of what IOHIDCheckAccess claims.
+    var hasReceivedTouchData: Bool {
+        frameLock.lock()
+        defer { frameLock.unlock() }
+        return everReceivedFrame
+    }
+
+    private func noteFrameReceived() {
+        frameLock.lock()
+        lastFrameTime = CFAbsoluteTimeGetCurrent()
+        everReceivedFrame = true
+        frameLock.unlock()
+    }
     private var devices: [MultitouchBridge.MTDeviceRef] = []
     // Keeps the CFArray from MTDeviceCreateList alive; it owns the refs.
     private var deviceListOwner: CFArray?
@@ -82,6 +105,7 @@ final class TouchStream {
     }
 
     private func dispatch(_ frame: TouchFrame) {
+        noteFrameReceived()
         queue.async { [weak self] in
             self?.onFrame?(frame)
         }
@@ -107,7 +131,7 @@ final class TouchStream {
         idMapLock.unlock()
         HapticEngine.shared.reset()
         deviceCount = devices.count
-        startedWithInputMonitoring = Permissions.inputMonitoringGranted
+        startedWithInputMonitoring = Permissions.inputMonitoringReportedGranted
         running = true
         scheduleRescan()
     }

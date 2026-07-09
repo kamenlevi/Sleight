@@ -45,13 +45,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let firstLaunch = !UserDefaults.standard.bool(forKey: "com.kamenlevi.sleight.launchedBefore")
         UserDefaults.standard.set(true, forKey: "com.kamenlevi.sleight.launchedBefore")
 
-        SleightLog.log("launch: accessibility=\(Permissions.accessibilityGranted) inputMonitoring=\(Permissions.inputMonitoringGranted) multitouch=\(MultitouchBridge.isAvailable)")
+        SleightLog.log("launch: accessibility=\(Permissions.accessibilityGranted) inputMonitoring(reported)=\(Permissions.inputMonitoringReportedGranted) inputMonitoring(working)=\(Permissions.inputMonitoringWorking) multitouch=\(MultitouchBridge.isAvailable)")
 
-        if !Permissions.inputMonitoringGranted {
-            Permissions.requestInputMonitoring()
-        }
-        if !Permissions.accessibilityGranted {
-            Permissions.requestAccessibility()
+        // Prompt the system dialogs ONLY on the very first launch. On later
+        // launches we never re-prompt — even if an API momentarily claims a
+        // permission is missing — so a working install is never nagged.
+        if firstLaunch {
+            if !Permissions.inputMonitoringWorking {
+                Permissions.requestInputMonitoring()
+            }
+            if !Permissions.accessibilityGranted {
+                Permissions.requestAccessibility()
+            }
         }
 
         GestureCoordinator.shared.start(initialConfig: ConfigStore.shared.config)
@@ -60,8 +65,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         Updater.shared.start()
 
-        // Once permissions land, restart the touch stream (grants don't apply
-        // retroactively to already-started devices) and bring up the tap.
+        // Bring subsystems up as permissions become effective, without ever
+        // prompting. Grants don't apply retroactively to already-started
+        // devices, so the touch stream is (re)started here once usable.
         permissionPoll = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 var done = true
@@ -75,11 +81,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 } else {
                     done = false
                 }
-                if Permissions.inputMonitoringGranted {
-                    if !TouchStream.shared.startedWithInputMonitoring {
-                        TouchStream.shared.start()
-                    }
-                } else {
+                // If a fresh Input Monitoring grant appeared after we started
+                // the stream without it, restart to pick it up (grants aren't
+                // retroactive). Never prompt.
+                if Permissions.inputMonitoringReportedGranted,
+                   !TouchStream.shared.startedWithInputMonitoring {
+                    TouchStream.shared.start()
+                }
+                if !Permissions.inputMonitoringWorking {
                     done = false
                 }
                 if done {
@@ -89,7 +98,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        if firstLaunch || !Permissions.inputMonitoringGranted || !Permissions.accessibilityGranted {
+        // Only surface the settings window unprompted on first launch or when
+        // something genuinely isn't working yet.
+        if firstLaunch || !Permissions.inputMonitoringWorking || !Permissions.accessibilityGranted {
             SettingsWindow.show(tab: .general)
         }
     }

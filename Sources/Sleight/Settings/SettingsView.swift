@@ -38,7 +38,7 @@ struct GeneralSettingsView: View {
     @State private var store = ConfigStore.shared
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var accessibilityOK = Permissions.accessibilityGranted
-    @State private var inputMonitoringOK = Permissions.inputMonitoringGranted
+    @State private var inputMonitoringOK = Permissions.inputMonitoringWorking
     @State private var suppressorRunning = EventSuppressor.shared.isRunning
 
     private let refresh = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
@@ -83,10 +83,10 @@ struct GeneralSettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("Permissions") {
+            Section {
                 PermissionRow(
                     title: "Input Monitoring",
-                    detail: "Required to read raw finger positions from the trackpad. If it shows enabled in System Settings but still reads ✕ here, toggle Sleight off and on in that list.",
+                    detail: "Required to read raw finger positions from the trackpad.",
                     granted: inputMonitoringOK,
                     request: {
                         Permissions.requestInputMonitoring()
@@ -104,7 +104,7 @@ struct GeneralSettingsView: View {
                 )
                 if !accessibilityOK || !inputMonitoringOK {
                     HStack {
-                        Text("Granted it but still shows ✕? The old entry went stale — repair deletes it and asks fresh.")
+                        Text("Granted it but still shows ✕? The old entry is stale — Repair deletes it so you can grant once, cleanly.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                         Spacer()
@@ -113,24 +113,20 @@ struct GeneralSettingsView: View {
                         }
                     }
                 }
+            } header: {
+                Text("Permissions")
+            } footer: {
+                Text("Sleight only ever asks for these once. If a checkbox looks right in System Settings but Sleight still shows ✕, use Repair.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             Section {
-                HStack {
-                    Text("Level that counts as 50%")
-                    Slider(value: $store.config.keyboardMidpoint, in: 0.05...0.95)
-                    Text(store.config.keyboardMidpoint, format: .percent.precision(.fractionLength(0)))
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
-                        .frame(width: 42, alignment: .trailing)
-                }
-                Button("Preview this level") {
-                    KeyboardBacklight.shared.set(Float(store.config.keyboardMidpoint))
-                }
+                KeyboardLevelsEditor(levels: $store.config.keyboardLevels)
             } header: {
-                Text("Keyboard Backlight")
+                Text("Keyboard Backlight Cycle")
             } footer: {
-                Text("Backlight LEDs aren't perceptually linear — the hardware's 50% looks nearly full. Pick the level that looks like half brightness to you; Sleight's gestures and HUD treat it as 50%.")
+                Text("The “Cycle Keyboard Backlight” action (a shortcut, tap, or custom gesture) steps through these levels in order, then wraps around. Percentages are the actual hardware brightness. Backlight LEDs aren’t perceptually even, so a low value like 20% often looks like a natural middle.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -164,10 +160,99 @@ struct GeneralSettingsView: View {
         .formStyle(.grouped)
         .onReceive(refresh) { _ in
             accessibilityOK = Permissions.accessibilityGranted
-            inputMonitoringOK = Permissions.inputMonitoringGranted
+            inputMonitoringOK = Permissions.inputMonitoringWorking
             launchAtLogin = SMAppService.mainApp.status == .enabled
             suppressorRunning = EventSuppressor.shared.isRunning
         }
+    }
+}
+
+private struct KeyboardLevelsEditor: View {
+    @Binding var levels: [Double]
+
+    private var sorted: [Double] {
+        Array(Set(levels.map { min(max($0, 0), 1) })).sorted()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(sorted.enumerated()), id: \.offset) { index, level in
+                HStack {
+                    Image(systemName: iconFor(level))
+                        .foregroundStyle(.tint)
+                        .frame(width: 22)
+                    Slider(
+                        value: Binding(
+                            get: { level },
+                            set: { updateLevel(at: index, to: $0) }
+                        ),
+                        in: 0...1
+                    )
+                    Text(level, format: .percent.precision(.fractionLength(0)))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .frame(width: 42, alignment: .trailing)
+                    Button {
+                        KeyboardBacklight.shared.set(Float(level))
+                    } label: {
+                        Image(systemName: "eye")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Preview this level")
+                    Button(role: .destructive) {
+                        removeLevel(at: index)
+                    } label: {
+                        Image(systemName: "minus.circle")
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(sorted.count <= 2)
+                }
+            }
+            Button {
+                addLevel()
+            } label: {
+                Label("Add Level", systemImage: "plus.circle")
+            }
+            .buttonStyle(.borderless)
+            .padding(.top, 2)
+        }
+    }
+
+    private func iconFor(_ level: Double) -> String {
+        if level <= 0.001 { return "light.min" }
+        if level >= 0.999 { return "light.max" }
+        return "keyboard.badge.ellipsis"
+    }
+
+    private func updateLevel(at index: Int, to value: Double) {
+        var current = sorted
+        guard index < current.count else { return }
+        current[index] = min(max(value, 0), 1)
+        levels = current
+    }
+
+    private func removeLevel(at index: Int) {
+        var current = sorted
+        guard index < current.count, current.count > 2 else { return }
+        current.remove(at: index)
+        levels = current
+    }
+
+    private func addLevel() {
+        var current = sorted
+        // Insert into the largest gap so the new level is useful by default.
+        var bestGap = -1.0
+        var newValue = 0.5
+        let padded = [0.0] + current + [1.0]
+        for i in 0..<(padded.count - 1) {
+            let gap = padded[i + 1] - padded[i]
+            if gap > bestGap {
+                bestGap = gap
+                newValue = (padded[i] + padded[i + 1]) / 2
+            }
+        }
+        current.append((newValue * 100).rounded() / 100)
+        levels = Array(Set(current)).sorted()
     }
 }
 
@@ -188,7 +273,7 @@ private struct UpdateStatusRow: View {
             case .downloading(let version):
                 Text("Downloading \(version)…").foregroundStyle(.secondary)
             case .staged(let version):
-                Text("\(version) ready — installs on next wake.")
+                Text("\(version) ready — installing…")
                     .foregroundStyle(.green)
             case .failed(let message):
                 Text("Check failed: \(message)")
@@ -196,16 +281,10 @@ private struct UpdateStatusRow: View {
                     .lineLimit(2)
             }
             Spacer()
-            if case .staged = updater.state {
-                Button("Restart to Update") {
-                    updater.applyStagedUpdate()
-                }
-            } else {
-                Button("Check Now") {
-                    Task { await updater.check() }
-                }
-                .disabled(updater.state == .checking)
+            Button("Check Now") {
+                Task { await updater.check(userInitiated: true) }
             }
+            .disabled(updater.state == .checking)
         }
         .font(.callout)
     }

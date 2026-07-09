@@ -225,18 +225,16 @@ struct SleightConfig: Codable, Equatable {
     var freezePointer = false
     /// Install downloaded updates automatically when the Mac wakes.
     var autoUpdate = true
-    /// Hardware backlight level that reads as "half brightness" to the eye.
-    /// LEDs aren't perceptually linear — hardware 50% looks nearly full, so
-    /// the keyboard-brightness scale bends through this point: the HUD's 50%
-    /// = this hardware level.
-    var keyboardMidpoint = 0.2
+    /// Levels the keyboard-backlight cycle steps through, as actual hardware
+    /// fractions (shown as real percentages in the HUD). User-editable.
+    var keyboardLevels: [Double] = [0, 0.2, 1.0]
     var enabled = true
 
     enum CodingKeys: String, CodingKey {
         case twoFingerDial, threeFingerDial, slider
         case threeFingerTap, fourFingerTap, fiveFingerTap
         case customGestures, shortcuts
-        case hapticDetents, showHUD, freezeScreen, freezePointer, autoUpdate, keyboardMidpoint, enabled
+        case hapticDetents, showHUD, freezeScreen, freezePointer, autoUpdate, keyboardLevels, enabled
     }
 }
 
@@ -259,7 +257,7 @@ extension SleightConfig {
         freezeScreen = (try? c.decodeIfPresent(Bool.self, forKey: .freezeScreen)) ?? nil ?? defaults.freezeScreen
         freezePointer = (try? c.decodeIfPresent(Bool.self, forKey: .freezePointer)) ?? nil ?? defaults.freezePointer
         autoUpdate = (try? c.decodeIfPresent(Bool.self, forKey: .autoUpdate)) ?? nil ?? defaults.autoUpdate
-        keyboardMidpoint = (try? c.decodeIfPresent(Double.self, forKey: .keyboardMidpoint)) ?? nil ?? defaults.keyboardMidpoint
+        keyboardLevels = (try? c.decodeIfPresent([Double].self, forKey: .keyboardLevels)) ?? nil ?? defaults.keyboardLevels
         enabled = (try? c.decodeIfPresent(Bool.self, forKey: .enabled)) ?? nil ?? defaults.enabled
     }
 }

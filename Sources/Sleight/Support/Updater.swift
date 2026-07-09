@@ -70,9 +70,15 @@ final class Updater {
         }
     }
 
-    func check() async {
+    /// `userInitiated` = triggered by the "Check Now" button: if a newer
+    /// version is found, install it right away (relaunch) instead of waiting
+    /// for the next wake from sleep.
+    func check(userInitiated: Bool = false) async {
         if case .downloading = state { return }
-        if case .staged = state { return }
+        if case .staged = state {
+            if userInitiated { applyStagedUpdate() }
+            return
+        }
         state = .checking
         do {
             var request = URLRequest(url: URL(string:
@@ -98,11 +104,16 @@ final class Updater {
                 state = .upToDate
                 return
             }
-            SleightLog.log("updater: downloading \(latest)")
+            SleightLog.log("updater: downloading \(latest) (userInitiated=\(userInitiated))")
             state = .downloading(latest)
             try await download(zipURL, version: latest)
             state = .staged(latest)
-            SleightLog.log("updater: \(latest) staged, applies on wake or via menu")
+            if userInitiated {
+                SleightLog.log("updater: \(latest) staged, installing now")
+                applyStagedUpdate()
+            } else {
+                SleightLog.log("updater: \(latest) staged, applies on wake or via menu")
+            }
         } catch {
             SleightLog.log("updater: check failed: \(error.localizedDescription)")
             state = .failed(error.localizedDescription)
