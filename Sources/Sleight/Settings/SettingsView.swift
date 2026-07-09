@@ -7,38 +7,36 @@ struct SettingsView: View {
     private struct TabItem: Identifiable {
         let tab: SettingsTab
         let title: String
-        let symbol: String
         var id: SettingsTab { tab }
     }
 
     private let tabs: [TabItem] = [
-        .init(tab: .general, title: "General", symbol: "gearshape"),
-        .init(tab: .gestures, title: "Gestures", symbol: "hand.draw"),
-        .init(tab: .custom, title: "Custom", symbol: "wand.and.stars"),
-        .init(tab: .shortcuts, title: "Shortcuts", symbol: "command"),
-        .init(tab: .visualizer, title: "Visualizer", symbol: "dot.circle.and.hand.point.up.left"),
-        .init(tab: .about, title: "About", symbol: "info.circle"),
+        .init(tab: .general, title: "General"),
+        .init(tab: .gestures, title: "Gestures"),
+        .init(tab: .custom, title: "Custom"),
+        .init(tab: .shortcuts, title: "Shortcuts"),
+        .init(tab: .visualizer, title: "Visualizer"),
+        .init(tab: .about, title: "About"),
     ]
 
-    // A custom tab bar instead of SwiftUI's TabView: on macOS 26 the native
-    // tab strip paints a Liquid Glass blob behind the selected/hovered item
-    // that looks different depending on the viewer's Transparency setting.
-    // This bar renders identically everywhere.
+    // A small, text-only custom tab bar instead of SwiftUI's TabView: on
+    // macOS 26 the native tab strip paints a Liquid Glass blob behind the
+    // selected item that looks different depending on the viewer's
+    // Transparency setting. This renders identically everywhere.
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 2) {
+            HStack(spacing: 4) {
                 ForEach(tabs) { item in
                     TabBarButton(
                         title: item.title,
-                        symbol: item.symbol,
                         isSelected: state.selectedTab == item.tab
                     ) {
                         state.selectedTab = item.tab
                     }
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
             .frame(maxWidth: .infinity)
             .background(.background)
 
@@ -62,7 +60,6 @@ struct SettingsView: View {
 
 private struct TabBarButton: View {
     let title: String
-    let symbol: String
     let isSelected: Bool
     let action: () -> Void
 
@@ -70,22 +67,18 @@ private struct TabBarButton: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 3) {
-                Image(systemName: symbol)
-                    .font(.system(size: 17))
-                    .frame(height: 20)
-                Text(title)
-                    .font(.system(size: 11))
-            }
-            .frame(width: 76, height: 46)
-            .foregroundStyle(isSelected ? Color.accentColor : .secondary)
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(isSelected
-                          ? Color.accentColor.opacity(0.14)
-                          : (hovering ? Color.primary.opacity(0.07) : Color.clear))
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            Text(title)
+                .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+                .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(isSelected
+                              ? Color.accentColor.opacity(0.12)
+                              : (hovering ? Color.primary.opacity(0.06) : Color.clear))
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
@@ -303,25 +296,6 @@ private struct LevelRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            // Eye toggle: open = active in the cycle, slashed = kept but
-            // skipped. Clicking animates between the two.
-            Button {
-                if level.enabled, !canDisable { NSSound.beep(); return }
-                withAnimation(.snappy(duration: 0.25)) {
-                    level.enabled.toggle()
-                }
-                if level.enabled {
-                    KeyboardBacklight.shared.set(Float(level.value))
-                }
-            } label: {
-                Image(systemName: level.enabled ? "eye" : "eye.slash")
-                    .foregroundStyle(level.enabled ? Color.accentColor : .secondary)
-                    .contentTransition(.symbolEffect(.replace))
-                    .frame(width: 22)
-            }
-            .buttonStyle(.borderless)
-            .help(level.enabled ? "Active — click to skip this level" : "Skipped — click to include it")
-
             Image(systemName: icon)
                 .foregroundStyle(level.enabled ? .primary : .secondary)
                 .frame(width: 20)
@@ -343,13 +317,70 @@ private struct LevelRow: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 42, alignment: .trailing)
 
+            // Eye toggle: open = active in the cycle, closed lid = kept but
+            // skipped. Clicking blinks it shut / open.
+            Button {
+                if level.enabled, !canDisable { NSSound.beep(); return }
+                withAnimation(.snappy(duration: 0.22)) {
+                    level.enabled.toggle()
+                }
+                if level.enabled {
+                    KeyboardBacklight.shared.set(Float(level.value))
+                }
+            } label: {
+                EyeToggleIcon(open: level.enabled)
+                    .frame(width: 22, height: 16)
+            }
+            .buttonStyle(.borderless)
+            .help(level.enabled ? "Active — click to skip this level" : "Skipped — click to include it")
+
             Button(role: .destructive, action: onRemove) {
                 Image(systemName: "minus.circle")
             }
             .buttonStyle(.borderless)
             .disabled(!canRemove)
         }
-        .opacity(level.enabled ? 1 : 0.5)
+        .opacity(level.enabled ? 1 : 0.55)
+    }
+}
+
+/// An eye that blinks: open shows the iris, closed shows a lidded curve with
+/// little lashes — clearer than a slash for "this level is hidden".
+private struct EyeToggleIcon: View {
+    let open: Bool
+
+    var body: some View {
+        ZStack {
+            Image(systemName: "eye")
+                .foregroundStyle(Color.accentColor)
+                .opacity(open ? 1 : 0)
+                .scaleEffect(open ? 1 : 0.85)
+            ClosedEye()
+                .stroke(Color.secondary, style: StrokeStyle(lineWidth: 1.7, lineCap: .round, lineJoin: .round))
+                .opacity(open ? 0 : 1)
+        }
+        .font(.system(size: 15))
+    }
+}
+
+private struct ClosedEye: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let y = rect.midY + rect.height * 0.12
+        // The lid: a gentle downturned curve.
+        path.move(to: CGPoint(x: rect.minX + rect.width * 0.08, y: y))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.maxX - rect.width * 0.08, y: y),
+            control: CGPoint(x: rect.midX, y: y - rect.height * 0.42)
+        )
+        // Three short lashes hanging below the lid.
+        for fraction in [0.28, 0.5, 0.72] {
+            let x = rect.minX + rect.width * fraction
+            let top = y + rect.height * 0.14
+            path.move(to: CGPoint(x: x, y: top))
+            path.addLine(to: CGPoint(x: x, y: top + rect.height * 0.22))
+        }
+        return path
     }
 }
 
