@@ -16,6 +16,7 @@ Free, open source, and fully native (Swift + SwiftUI, no dependencies).
 | **Custom gestures** | Design your own in Settings → Custom: place finger zones on the pad, give each a direction or keep it stationary, draw a boundary where the gesture may start, choose speed and what it controls |  |
 | **3 / 4 / 5-finger tap** | Quick tap | Configurable |
 | **Keyboard shortcuts** | Bind any combination (e.g. 🌐Space) to a Sleight action, with warnings about which macOS function you'd be giving up |  |
+| **Automations** | Schedule any action for a set time on chosen days — e.g. keyboard backlight to 20% at 21:00, or mute weekdays at 9:00 (Settings → Automation) |  |
 
 Every continuous gesture can be remapped to volume, display brightness, or
 keyboard backlight, with per-gesture sensitivity and direction. Taps can
@@ -35,6 +36,21 @@ Details that make it feel native:
 - Handles Bluetooth trackpad disconnects/reconnects and sleep/wake automatically.
 
 ## Install
+
+### Download (easiest)
+
+1. Download `Sleight-<version>.zip` from the
+   [latest release](https://github.com/kamenlevi/Sleight/releases/latest) and unzip it.
+2. Drag `Sleight.app` into your **Applications** folder.
+3. Open it. macOS will warn that it can't verify the app (it's signed with a
+   local certificate, not notarized) — allow it in
+   System Settings → Privacy & Security → "Open Anyway".
+
+If you skip step 2 and launch straight from Downloads, Sleight installs
+itself into Applications and relaunches from there — running from a
+quarantined folder would break self-updating and permissions.
+
+### Build from source
 
 Requires macOS 14+ and the Xcode Command Line Tools (`xcode-select --install`).
 

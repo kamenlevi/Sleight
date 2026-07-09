@@ -15,6 +15,7 @@ struct SettingsView: View {
         .init(tab: .gestures, title: "Gestures"),
         .init(tab: .custom, title: "Custom"),
         .init(tab: .shortcuts, title: "Shortcuts"),
+        .init(tab: .automation, title: "Automation"),
         .init(tab: .visualizer, title: "Visualizer"),
         .init(tab: .about, title: "About"),
     ]
@@ -48,6 +49,7 @@ struct SettingsView: View {
                 case .gestures: GestureSettingsView()
                 case .custom: CustomGesturesView()
                 case .shortcuts: ShortcutsView()
+                case .automation: AutomationView()
                 case .visualizer: VisualizerView()
                 case .about: AboutView()
                 }

@@ -207,6 +207,86 @@ struct CustomGesture: Codable, Equatable, Identifiable {
     }
 }
 
+// MARK: - Automations
+
+/// What a scheduled automation does when its time arrives.
+enum AutomationAction: String, Codable, CaseIterable, Identifiable {
+    case setVolume
+    case setDisplayBrightness
+    case setKeyboardBrightness
+    case mute
+    case unmute
+    case playPause
+    case nextTrack
+    case previousTrack
+    case keyboardBrightnessCycle
+    case launchApp
+    case shellCommand
+
+    var id: String { rawValue }
+
+    /// Actions that set something to a specific percentage.
+    var usesLevel: Bool {
+        switch self {
+        case .setVolume, .setDisplayBrightness, .setKeyboardBrightness: true
+        default: false
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .setVolume: "Set Volume to…"
+        case .setDisplayBrightness: "Set Display Brightness to…"
+        case .setKeyboardBrightness: "Set Keyboard Backlight to…"
+        case .mute: "Mute"
+        case .unmute: "Unmute"
+        case .playPause: "Play / Pause"
+        case .nextTrack: "Next Track"
+        case .previousTrack: "Previous Track"
+        case .keyboardBrightnessCycle: "Cycle Keyboard Backlight"
+        case .launchApp: "Launch App…"
+        case .shellCommand: "Run Shell Command…"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .setVolume: "speaker.wave.2.fill"
+        case .setDisplayBrightness: "sun.max.fill"
+        case .setKeyboardBrightness: "keyboard.fill"
+        case .mute: "speaker.slash.fill"
+        case .unmute: "speaker.fill"
+        case .playPause: "playpause.fill"
+        case .nextTrack: "forward.fill"
+        case .previousTrack: "backward.fill"
+        case .keyboardBrightnessCycle: "light.max"
+        case .launchApp: "app.badge.checkmark"
+        case .shellCommand: "terminal.fill"
+        }
+    }
+}
+
+/// A job that runs at a set time on chosen days — e.g. keyboard backlight to
+/// 20% at 21:00 every day, or volume to 0 at 9:00 on weekdays.
+struct Automation: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var enabled = true
+    var action: AutomationAction = .setKeyboardBrightness
+    /// 0…1 target for the set-to-percentage actions.
+    var level: Double = 0.5
+    var appPath = ""
+    var shellCommand = ""
+    var hour = 9
+    var minute = 0
+    /// Calendar weekday numbers (1 = Sunday … 7 = Saturday).
+    var weekdays: Set<Int> = [1, 2, 3, 4, 5, 6, 7]
+
+    var summary: String {
+        let time = String(format: "%02d:%02d", hour, minute)
+        return "\(time) → \(action.label)"
+    }
+}
+
 struct TapConfig: Codable, Equatable {
     var action: DiscreteAction = .none
     var appPath: String = ""
@@ -222,6 +302,7 @@ struct SleightConfig: Codable, Equatable {
     var fiveFingerTap = TapConfig()
     var customGestures: [CustomGesture] = []
     var shortcuts: [ShortcutBinding] = []
+    var automations: [Automation] = []
     var hapticDetents = true
     var showHUD = true
     /// Swallow scroll/swipe input the moment a gesture posture is detected,
@@ -249,7 +330,7 @@ struct SleightConfig: Codable, Equatable {
     enum CodingKeys: String, CodingKey {
         case twoFingerDial, threeFingerDial, slider
         case threeFingerTap, fourFingerTap, fiveFingerTap
-        case customGestures, shortcuts
+        case customGestures, shortcuts, automations
         case hapticDetents, showHUD, freezeScreen, freezePointer, autoUpdate
         case keyboardLevels, animationSpeed, animateHUDReappear, enabled
     }
@@ -269,6 +350,7 @@ extension SleightConfig {
         fiveFingerTap = (try? c.decodeIfPresent(TapConfig.self, forKey: .fiveFingerTap)) ?? nil ?? defaults.fiveFingerTap
         customGestures = (try? c.decodeIfPresent([CustomGesture].self, forKey: .customGestures)) ?? nil ?? defaults.customGestures
         shortcuts = (try? c.decodeIfPresent([ShortcutBinding].self, forKey: .shortcuts)) ?? nil ?? defaults.shortcuts
+        automations = (try? c.decodeIfPresent([Automation].self, forKey: .automations)) ?? nil ?? defaults.automations
         hapticDetents = (try? c.decodeIfPresent(Bool.self, forKey: .hapticDetents)) ?? nil ?? defaults.hapticDetents
         showHUD = (try? c.decodeIfPresent(Bool.self, forKey: .showHUD)) ?? nil ?? defaults.showHUD
         freezeScreen = (try? c.decodeIfPresent(Bool.self, forKey: .freezeScreen)) ?? nil ?? defaults.freezeScreen
