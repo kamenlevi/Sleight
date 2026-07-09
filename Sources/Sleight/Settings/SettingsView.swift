@@ -381,9 +381,9 @@ private struct ClosedEye: Shape {
         let c = CGPoint(x: r.midX, y: r.minY + r.height * 0.95)
         path.move(to: p0)
         path.addQuadCurve(to: p1, control: c)
-        // Lashes hang from the outside of the curve, fanning out and down.
+        // Three lashes hang from the outside of the curve, fanning out/down.
         let lashes: [(t: CGFloat, dx: CGFloat)] =
-            [(0.12, -0.5), (0.33, -0.22), (0.5, 0), (0.67, 0.22), (0.88, 0.5)]
+            [(0.2, -0.5), (0.5, 0), (0.8, 0.5)]
         for lash in lashes {
             let base = quad(p0, c, p1, lash.t)
             path.move(to: base)
