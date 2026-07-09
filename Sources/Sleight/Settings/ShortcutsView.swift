@@ -143,28 +143,43 @@ private struct ShortcutRecorder: View {
 
     private func startRecording() {
         recording = true
-        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            let code = Int(event.keyCode)
-            let mods = Keystrokes.canonical(event.modifierFlags, keyCode: code)
-            if code == 53, mods == 0 { // Esc cancels
-                stopRecording()
+        // Prefer the session event tap: it sees virtually every combination,
+        // including ones macOS would otherwise claim before a per-app monitor
+        // could see them (⌘Space, ⌘Tab, screenshot keys, …). Fall back to a
+        // local monitor when the tap isn't running (Accessibility not granted).
+        if EventSuppressor.shared.canCaptureRecording {
+            EventSuppressor.shared.beginRecordingCapture { code, mods in
+                Task { @MainActor in accept(code: code, mods: mods) }
+            }
+        } else {
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                accept(code: Int(event.keyCode),
+                       mods: Keystrokes.canonical(event.modifierFlags, keyCode: Int(event.keyCode)))
                 return nil
             }
-            // A bare letter would shadow all normal typing; require a
-            // modifier unless it's a functional key (F-keys, paging keys).
-            if mods == 0, !Keystrokes.functionalKeys.contains(code) {
-                NSSound.beep()
-                return nil
-            }
-            keyCode = code
-            modifiers = mods
-            stopRecording()
-            return nil
         }
+    }
+
+    private func accept(code: Int, mods: Int) {
+        if code == 53, mods == 0 { // Esc cancels
+            stopRecording()
+            return
+        }
+        // Require at least one modifier for ordinary keys (a bare letter would
+        // shadow typing); functional keys (F-keys, arrows, paging, media) are
+        // fine on their own. Everything else is accepted.
+        if mods == 0, !Keystrokes.functionalKeys.contains(code) {
+            NSSound.beep()
+            return
+        }
+        keyCode = code
+        modifiers = mods
+        stopRecording()
     }
 
     private func stopRecording() {
         recording = false
+        EventSuppressor.shared.endRecordingCapture()
         if let monitor {
             NSEvent.removeMonitor(monitor)
             self.monitor = nil

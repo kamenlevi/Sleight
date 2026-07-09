@@ -85,6 +85,13 @@ struct ShortcutBinding: Codable, Equatable, Identifiable {
     var isRecorded: Bool { keyCode >= 0 }
 }
 
+struct KeyboardLevel: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var value: Double
+    /// A disabled level stays in the list (greyed out) but the cycle skips it.
+    var enabled = true
+}
+
 struct DialConfig: Codable, Equatable {
     var enabled = true
     var control: ContinuousControl = .volume
@@ -226,8 +233,11 @@ struct SleightConfig: Codable, Equatable {
     /// Install downloaded updates automatically when the Mac wakes.
     var autoUpdate = true
     /// Levels the keyboard-backlight cycle steps through, as actual hardware
-    /// fractions (shown as real percentages in the HUD). User-editable.
-    var keyboardLevels: [Double] = [0, 0.2, 1.0]
+    /// fractions (shown as real percentages in the HUD). User-editable; a
+    /// level can be disabled (kept in the list but skipped by the cycle).
+    var keyboardLevels: [KeyboardLevel] = [
+        KeyboardLevel(value: 0), KeyboardLevel(value: 0.2), KeyboardLevel(value: 1.0),
+    ]
     var enabled = true
 
     enum CodingKeys: String, CodingKey {
@@ -257,7 +267,14 @@ extension SleightConfig {
         freezeScreen = (try? c.decodeIfPresent(Bool.self, forKey: .freezeScreen)) ?? nil ?? defaults.freezeScreen
         freezePointer = (try? c.decodeIfPresent(Bool.self, forKey: .freezePointer)) ?? nil ?? defaults.freezePointer
         autoUpdate = (try? c.decodeIfPresent(Bool.self, forKey: .autoUpdate)) ?? nil ?? defaults.autoUpdate
-        keyboardLevels = (try? c.decodeIfPresent([Double].self, forKey: .keyboardLevels)) ?? nil ?? defaults.keyboardLevels
+        // Accept the new [KeyboardLevel] shape, or migrate the old [Double].
+        if let levels = try? c.decode([KeyboardLevel].self, forKey: .keyboardLevels) {
+            keyboardLevels = levels
+        } else if let raw = try? c.decode([Double].self, forKey: .keyboardLevels) {
+            keyboardLevels = raw.map { KeyboardLevel(value: $0) }
+        } else {
+            keyboardLevels = defaults.keyboardLevels
+        }
         enabled = (try? c.decodeIfPresent(Bool.self, forKey: .enabled)) ?? nil ?? defaults.enabled
     }
 }

@@ -4,31 +4,91 @@ import SwiftUI
 struct SettingsView: View {
     @State private var state = SettingsState.shared
 
+    private struct TabItem: Identifiable {
+        let tab: SettingsTab
+        let title: String
+        let symbol: String
+        var id: SettingsTab { tab }
+    }
+
+    private let tabs: [TabItem] = [
+        .init(tab: .general, title: "General", symbol: "gearshape"),
+        .init(tab: .gestures, title: "Gestures", symbol: "hand.draw"),
+        .init(tab: .custom, title: "Custom", symbol: "wand.and.stars"),
+        .init(tab: .shortcuts, title: "Shortcuts", symbol: "command"),
+        .init(tab: .visualizer, title: "Visualizer", symbol: "dot.circle.and.hand.point.up.left"),
+        .init(tab: .about, title: "About", symbol: "info.circle"),
+    ]
+
+    // A custom tab bar instead of SwiftUI's TabView: on macOS 26 the native
+    // tab strip paints a Liquid Glass blob behind the selected/hovered item
+    // that looks different depending on the viewer's Transparency setting.
+    // This bar renders identically everywhere.
     var body: some View {
-        TabView(selection: Binding(
-            get: { state.selectedTab },
-            set: { state.selectedTab = $0 }
-        )) {
-            GeneralSettingsView()
-                .tabItem { Label("General", systemImage: "gearshape") }
-                .tag(SettingsTab.general)
-            GestureSettingsView()
-                .tabItem { Label("Gestures", systemImage: "hand.draw") }
-                .tag(SettingsTab.gestures)
-            CustomGesturesView()
-                .tabItem { Label("Custom", systemImage: "wand.and.stars") }
-                .tag(SettingsTab.custom)
-            ShortcutsView()
-                .tabItem { Label("Shortcuts", systemImage: "command") }
-                .tag(SettingsTab.shortcuts)
-            VisualizerView()
-                .tabItem { Label("Visualizer", systemImage: "dot.circle.and.hand.point.up.left.fill") }
-                .tag(SettingsTab.visualizer)
-            AboutView()
-                .tabItem { Label("About", systemImage: "info.circle") }
-                .tag(SettingsTab.about)
+        VStack(spacing: 0) {
+            HStack(spacing: 2) {
+                ForEach(tabs) { item in
+                    TabBarButton(
+                        title: item.title,
+                        symbol: item.symbol,
+                        isSelected: state.selectedTab == item.tab
+                    ) {
+                        state.selectedTab = item.tab
+                    }
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
+            .background(.background)
+
+            Divider()
+
+            Group {
+                switch state.selectedTab {
+                case .general: GeneralSettingsView()
+                case .gestures: GestureSettingsView()
+                case .custom: CustomGesturesView()
+                case .shortcuts: ShortcutsView()
+                case .visualizer: VisualizerView()
+                case .about: AboutView()
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(width: 640, height: 600)
+    }
+}
+
+private struct TabBarButton: View {
+    let title: String
+    let symbol: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                Image(systemName: symbol)
+                    .font(.system(size: 17))
+                    .frame(height: 20)
+                Text(title)
+                    .font(.system(size: 11))
+            }
+            .frame(width: 76, height: 46)
+            .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(isSelected
+                          ? Color.accentColor.opacity(0.14)
+                          : (hovering ? Color.primary.opacity(0.07) : Color.clear))
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
     }
 }
 
@@ -104,11 +164,14 @@ struct GeneralSettingsView: View {
                 )
                 if !accessibilityOK || !inputMonitoringOK {
                     HStack {
-                        Text("Granted it but still shows ✕? The old entry is stale — Repair deletes it so you can grant once, cleanly.")
+                        Text("Just granted it? Relaunch so it takes effect. Still ✕ after that, Repair clears a stale entry.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Button("Repair Permissions") {
+                        Button("Relaunch") {
+                            Permissions.relaunch()
+                        }
+                        Button("Repair") {
                             Permissions.repair()
                         }
                     }
@@ -116,7 +179,7 @@ struct GeneralSettingsView: View {
             } header: {
                 Text("Permissions")
             } footer: {
-                Text("Sleight only ever asks for these once. If a checkbox looks right in System Settings but Sleight still shows ✕, use Repair.")
+                Text("Sleight only ever asks for these once. Because macOS caches Accessibility per running process, a just-granted permission usually needs a relaunch to register.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -168,45 +231,25 @@ struct GeneralSettingsView: View {
 }
 
 private struct KeyboardLevelsEditor: View {
-    @Binding var levels: [Double]
+    @Binding var levels: [KeyboardLevel]
 
-    private var sorted: [Double] {
-        Array(Set(levels.map { min(max($0, 0), 1) })).sorted()
+    /// Row order follows value, but each row keeps its stable id so edits and
+    /// the enable animation stay attached to the right level.
+    private var ordered: [KeyboardLevel] {
+        levels.sorted { $0.value < $1.value }
     }
+
+    private var enabledCount: Int { levels.filter(\.enabled).count }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ForEach(Array(sorted.enumerated()), id: \.offset) { index, level in
-                HStack {
-                    Image(systemName: iconFor(level))
-                        .foregroundStyle(.tint)
-                        .frame(width: 22)
-                    Slider(
-                        value: Binding(
-                            get: { level },
-                            set: { updateLevel(at: index, to: $0) }
-                        ),
-                        in: 0...1
-                    )
-                    Text(level, format: .percent.precision(.fractionLength(0)))
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
-                        .frame(width: 42, alignment: .trailing)
-                    Button {
-                        KeyboardBacklight.shared.set(Float(level))
-                    } label: {
-                        Image(systemName: "eye")
-                    }
-                    .buttonStyle(.borderless)
-                    .help("Preview this level")
-                    Button(role: .destructive) {
-                        removeLevel(at: index)
-                    } label: {
-                        Image(systemName: "minus.circle")
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(sorted.count <= 2)
-                }
+            ForEach(ordered) { level in
+                LevelRow(
+                    level: bindingFor(level.id),
+                    canDisable: level.enabled ? enabledCount > 2 : true,
+                    canRemove: levels.count > 2,
+                    onRemove: { levels.removeAll { $0.id == level.id } }
+                )
             }
             Button {
                 addLevel()
@@ -218,32 +261,23 @@ private struct KeyboardLevelsEditor: View {
         }
     }
 
-    private func iconFor(_ level: Double) -> String {
-        if level <= 0.001 { return "light.min" }
-        if level >= 0.999 { return "light.max" }
-        return "keyboard.badge.ellipsis"
-    }
-
-    private func updateLevel(at index: Int, to value: Double) {
-        var current = sorted
-        guard index < current.count else { return }
-        current[index] = min(max(value, 0), 1)
-        levels = current
-    }
-
-    private func removeLevel(at index: Int) {
-        var current = sorted
-        guard index < current.count, current.count > 2 else { return }
-        current.remove(at: index)
-        levels = current
+    private func bindingFor(_ id: UUID) -> Binding<KeyboardLevel> {
+        Binding(
+            get: { levels.first { $0.id == id } ?? KeyboardLevel(value: 0) },
+            set: { newValue in
+                if let i = levels.firstIndex(where: { $0.id == id }) {
+                    levels[i] = newValue
+                }
+            }
+        )
     }
 
     private func addLevel() {
-        var current = sorted
         // Insert into the largest gap so the new level is useful by default.
+        let values = levels.map(\.value).sorted()
         var bestGap = -1.0
         var newValue = 0.5
-        let padded = [0.0] + current + [1.0]
+        let padded = [0.0] + values + [1.0]
         for i in 0..<(padded.count - 1) {
             let gap = padded[i + 1] - padded[i]
             if gap > bestGap {
@@ -251,8 +285,71 @@ private struct KeyboardLevelsEditor: View {
                 newValue = (padded[i] + padded[i + 1]) / 2
             }
         }
-        current.append((newValue * 100).rounded() / 100)
-        levels = Array(Set(current)).sorted()
+        levels.append(KeyboardLevel(value: (newValue * 100).rounded() / 100))
+    }
+}
+
+private struct LevelRow: View {
+    @Binding var level: KeyboardLevel
+    let canDisable: Bool
+    let canRemove: Bool
+    let onRemove: () -> Void
+
+    private var icon: String {
+        if level.value <= 0.001 { return "light.min" }
+        if level.value >= 0.999 { return "light.max" }
+        return "keyboard.badge.ellipsis"
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            // Eye toggle: open = active in the cycle, slashed = kept but
+            // skipped. Clicking animates between the two.
+            Button {
+                if level.enabled, !canDisable { NSSound.beep(); return }
+                withAnimation(.snappy(duration: 0.25)) {
+                    level.enabled.toggle()
+                }
+                if level.enabled {
+                    KeyboardBacklight.shared.set(Float(level.value))
+                }
+            } label: {
+                Image(systemName: level.enabled ? "eye" : "eye.slash")
+                    .foregroundStyle(level.enabled ? Color.accentColor : .secondary)
+                    .contentTransition(.symbolEffect(.replace))
+                    .frame(width: 22)
+            }
+            .buttonStyle(.borderless)
+            .help(level.enabled ? "Active — click to skip this level" : "Skipped — click to include it")
+
+            Image(systemName: icon)
+                .foregroundStyle(level.enabled ? .primary : .secondary)
+                .frame(width: 20)
+
+            Slider(
+                value: Binding(
+                    get: { level.value },
+                    set: { level.value = min(max($0, 0), 1) }
+                ),
+                in: 0...1
+            ) { editing in
+                // Live preview while dragging.
+                if editing { KeyboardBacklight.shared.set(Float(level.value)) }
+            }
+            .disabled(!level.enabled)
+
+            Text(level.value, format: .percent.precision(.fractionLength(0)))
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .frame(width: 42, alignment: .trailing)
+
+            Button(role: .destructive, action: onRemove) {
+                Image(systemName: "minus.circle")
+            }
+            .buttonStyle(.borderless)
+            .disabled(!canRemove)
+        }
+        .opacity(level.enabled ? 1 : 0.5)
     }
 }
 

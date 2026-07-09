@@ -46,6 +46,47 @@ final class EventSuppressor: @unchecked Sendable {
         lock.unlock()
     }
 
+    // While set (during shortcut recording), the next real keyDown is
+    // captured and swallowed instead of matched. Because this runs on the
+    // session tap, it catches far more combinations than a per-app monitor,
+    // including ones macOS would otherwise consume first.
+    private var recordingCapture: (@Sendable (Int, Int) -> Void)?
+
+    var canCaptureRecording: Bool { tap != nil }
+
+    func beginRecordingCapture(_ handler: @escaping @Sendable (Int, Int) -> Void) {
+        lock.lock()
+        recordingCapture = handler
+        lock.unlock()
+    }
+
+    func endRecordingCapture() {
+        lock.lock()
+        recordingCapture = nil
+        lock.unlock()
+    }
+
+    /// Returns true if a recording capture consumed this keyDown.
+    private func handleRecording(_ event: CGEvent) -> Bool {
+        lock.lock()
+        let capture = recordingCapture
+        lock.unlock()
+        guard let capture else { return false }
+
+        let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
+        // Ignore standalone modifier keys and key-repeats.
+        let modifierKeyCodes: Set<Int> = [54, 55, 56, 57, 58, 59, 60, 61, 62, 63]
+        if modifierKeyCodes.contains(keyCode) { return true }
+        if event.getIntegerValueField(.keyboardEventAutorepeat) != 0 { return true }
+
+        let modifiers = Keystrokes.canonical(event.flags, keyCode: keyCode)
+        lock.lock()
+        recordingCapture = nil
+        lock.unlock()
+        DispatchQueue.main.async { capture(keyCode, modifiers) }
+        return true
+    }
+
     /// Returns true when the key event belongs to a registered shortcut and
     /// must be swallowed. Fires the action on the initial press (not repeats).
     private func handleKeyDown(_ event: CGEvent) -> Bool {
@@ -135,6 +176,9 @@ final class EventSuppressor: @unchecked Sendable {
             if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
                 suppressor.reenable()
                 return Unmanaged.passUnretained(event)
+            }
+            if type == .keyDown, suppressor.handleRecording(event) {
+                return nil
             }
             if type == .keyDown, suppressor.handleKeyDown(event) {
                 return nil

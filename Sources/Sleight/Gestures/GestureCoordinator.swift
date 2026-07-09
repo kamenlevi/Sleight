@@ -319,8 +319,10 @@ final class GestureCoordinator: @unchecked Sendable {
                 }
             }
         case .keyboardBrightnessCycle:
-            // Actual hardware levels, user-editable, shown as real percents.
-            var states = Set(config.keyboardLevels.map { Float(min(max($0, 0), 1)) }).sorted()
+            // Actual hardware levels, user-editable; disabled ones are skipped.
+            var states = Set(config.keyboardLevels
+                .filter { $0.enabled }
+                .map { Float(min(max($0.value, 0), 1)) }).sorted()
             if states.count < 2 { states = [0, 1] }
             let reading = KeyboardBacklight.shared.get()
             SleightLog.log("cycle backlight: current=\(reading == nil ? "nil" : "\(reading!)") levels=\(states)")

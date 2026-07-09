@@ -76,4 +76,16 @@ enum Permissions {
         requestInputMonitoring()
         requestAccessibility()
     }
+
+    /// Relaunch the app. macOS often keeps reporting Accessibility as denied
+    /// in a process that was already running when the grant was made; a
+    /// relaunch makes the fresh grant take effect.
+    static func relaunch() {
+        let path = Bundle.main.bundlePath
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = ["-c", "sleep 0.5; open \"\(path)\""]
+        try? process.run()
+        NSApp.terminate(nil)
+    }
 }
