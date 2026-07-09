@@ -57,11 +57,15 @@ private struct LevelBar: View {
             ZStack(alignment: .leading) {
                 Capsule()
                     .fill(.quaternary)
+                // Experiment: at exactly 0%, show no fill at all (not even the
+                // minimum rounded dot), so 0 reads as truly empty.
                 Capsule()
                     .fill(.primary)
-                    .frame(width: max(geo.size.height, geo.size.width * value))
+                    .frame(width: value <= 0 ? 0 : max(geo.size.height, geo.size.width * value))
             }
         }
-        .animation(.linear(duration: 0.05), value: value)
+        // Animation is driven explicitly by HUDController (withAnimation), so a
+        // fresh popup can appear at its value with no travel while a visible
+        // one glides. No implicit animation here.
     }
 }

@@ -119,10 +119,21 @@ struct GeneralSettingsView: View {
             Section {
                 Toggle("Show HUD while adjusting", isOn: $store.config.showHUD)
                 Toggle("Haptic detents on the trackpad", isOn: $store.config.hapticDetents)
+                HStack {
+                    Text("Animation speed")
+                    Slider(value: $store.config.animationSpeed, in: 0.5...2.5)
+                    Text(store.config.animationSpeed, format: .number.precision(.fractionLength(1)))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .frame(width: 30, alignment: .trailing)
+                    Text("×")
+                        .foregroundStyle(.secondary)
+                }
+                Toggle("Animate the bar on a reappearing popup", isOn: $store.config.animateHUDReappear)
             } header: {
                 Text("Feedback")
             } footer: {
-                Text("Detents make the dial click softly every few percent, like a physical knob.")
+                Text("Detents make the dial click softly every few percent, like a physical knob. Animation speed scales how quickly the HUD fades and its bar moves — higher is snappier. When the last option is off, a popup that reappears after fading shows its value immediately instead of sliding from the old one (e.g. 100 → 0).")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

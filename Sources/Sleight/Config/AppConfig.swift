@@ -238,13 +238,20 @@ struct SleightConfig: Codable, Equatable {
     var keyboardLevels: [KeyboardLevel] = [
         KeyboardLevel(value: 0), KeyboardLevel(value: 0.2), KeyboardLevel(value: 1.0),
     ]
+    /// Multiplier on HUD animation durations: higher = faster (1.0 = default).
+    var animationSpeed: Double = 1.0
+    /// When a popup appears after the previous one already faded away, animate
+    /// its bar travelling from the old value (e.g. 100 → 0). Off by default:
+    /// a fresh popup appears already at its value.
+    var animateHUDReappear = false
     var enabled = true
 
     enum CodingKeys: String, CodingKey {
         case twoFingerDial, threeFingerDial, slider
         case threeFingerTap, fourFingerTap, fiveFingerTap
         case customGestures, shortcuts
-        case hapticDetents, showHUD, freezeScreen, freezePointer, autoUpdate, keyboardLevels, enabled
+        case hapticDetents, showHUD, freezeScreen, freezePointer, autoUpdate
+        case keyboardLevels, animationSpeed, animateHUDReappear, enabled
     }
 }
 
@@ -275,6 +282,8 @@ extension SleightConfig {
         } else {
             keyboardLevels = defaults.keyboardLevels
         }
+        animationSpeed = (try? c.decodeIfPresent(Double.self, forKey: .animationSpeed)) ?? nil ?? defaults.animationSpeed
+        animateHUDReappear = (try? c.decodeIfPresent(Bool.self, forKey: .animateHUDReappear)) ?? nil ?? defaults.animateHUDReappear
         enabled = (try? c.decodeIfPresent(Bool.self, forKey: .enabled)) ?? nil ?? defaults.enabled
     }
 }

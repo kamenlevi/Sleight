@@ -14,7 +14,18 @@ enum SleightLog {
         return f
     }()
 
+    // Keep the log from growing forever: when it passes ~2 MB, keep the tail.
+    private static let didTrim: Bool = {
+        if let size = try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int,
+           size > 2_000_000,
+           let data = try? Data(contentsOf: url) {
+            try? data.suffix(200_000).write(to: url)
+        }
+        return true
+    }()
+
     static func log(_ message: String) {
+        _ = didTrim
         queue.async {
             let line = "\(stamp.string(from: Date())) \(message)\n"
             if let handle = try? FileHandle(forWritingTo: url) {
