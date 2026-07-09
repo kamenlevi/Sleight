@@ -68,7 +68,9 @@ private struct TabBarButton: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+                // Constant weight in all states: switching selection must not
+                // change any label's width, or the whole bar reflows slightly.
+                .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(isSelected ? Color.accentColor : .secondary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
@@ -329,7 +331,7 @@ private struct LevelRow: View {
                 }
             } label: {
                 EyeToggleIcon(open: level.enabled)
-                    .frame(width: 22, height: 16)
+                    .frame(width: 24, height: 18)
             }
             .buttonStyle(.borderless)
             .help(level.enabled ? "Active — click to skip this level" : "Skipped — click to include it")
@@ -364,21 +366,31 @@ private struct EyeToggleIcon: View {
 }
 
 private struct ClosedEye: Shape {
-    func path(in rect: CGRect) -> Path {
+    private func quad(_ p0: CGPoint, _ c: CGPoint, _ p1: CGPoint, _ t: CGFloat) -> CGPoint {
+        let mt = 1 - t
+        return CGPoint(x: mt * mt * p0.x + 2 * mt * t * c.x + t * t * p1.x,
+                       y: mt * mt * p0.y + 2 * mt * t * c.y + t * t * p1.y)
+    }
+
+    func path(in r: CGRect) -> Path {
         var path = Path()
-        let y = rect.midY + rect.height * 0.12
-        // The lid: a gentle downturned curve.
-        path.move(to: CGPoint(x: rect.minX + rect.width * 0.08, y: y))
-        path.addQuadCurve(
-            to: CGPoint(x: rect.maxX - rect.width * 0.08, y: y),
-            control: CGPoint(x: rect.midX, y: y - rect.height * 0.42)
-        )
-        // Three short lashes hanging below the lid.
-        for fraction in [0.28, 0.5, 0.72] {
-            let x = rect.minX + rect.width * fraction
-            let top = y + rect.height * 0.14
-            path.move(to: CGPoint(x: x, y: top))
-            path.addLine(to: CGPoint(x: x, y: top + rect.height * 0.22))
+        // A downturned lid: the ends sit high and the curve dips to its
+        // lowest point in the middle (an upside-down rainbow).
+        let p0 = CGPoint(x: r.minX + r.width * 0.08, y: r.minY + r.height * 0.32)
+        let p1 = CGPoint(x: r.maxX - r.width * 0.08, y: r.minY + r.height * 0.32)
+        let c = CGPoint(x: r.midX, y: r.minY + r.height * 0.95)
+        path.move(to: p0)
+        path.addQuadCurve(to: p1, control: c)
+        // Lashes hang from the outside of the curve, fanning out and down.
+        let lashes: [(t: CGFloat, dx: CGFloat)] =
+            [(0.12, -0.5), (0.33, -0.22), (0.5, 0), (0.67, 0.22), (0.88, 0.5)]
+        for lash in lashes {
+            let base = quad(p0, c, p1, lash.t)
+            path.move(to: base)
+            path.addLine(to: CGPoint(
+                x: base.x + lash.dx * r.width * 0.14,
+                y: base.y + r.height * 0.34
+            ))
         }
         return path
     }
