@@ -1,11 +1,11 @@
 import AppKit
 import Foundation
 
-/// Self-updater backed by GitHub Releases. Checks periodically, downloads a
-/// newer Sleight.app quietly into a staging folder, and applies it either
-/// when the Mac wakes from sleep (so the swap+relaunch is invisible) or when
-/// the user clicks the menu item. Because builds are signed with the stable
-/// local identity, updates do NOT reset permission grants.
+/// Update checker backed by GitHub Releases. Checks periodically and only
+/// ever *tells* the user a newer version exists — nothing is downloaded or
+/// installed until they click Install (menu bar or Settings → General).
+/// Because builds are signed with the stable local identity, updates do NOT
+/// reset permission grants.
 @MainActor
 @Observable
 final class Updater {
@@ -15,7 +15,10 @@ final class Updater {
         case idle
         case checking
         case upToDate
+        /// A newer release exists; nothing has been downloaded yet.
+        case available(String)
         case downloading(String)
+        /// Downloaded and verified, ready to swap in on the user's click.
         case staged(String)
         case failed(String)
     }
@@ -29,8 +32,9 @@ final class Updater {
     private let stagingDir = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Library/Application Support/Sleight/Update")
     private var stagedAppURL: URL { stagingDir.appendingPathComponent("Sleight.app") }
+    /// Zip asset of the release currently in `.available`.
+    private var availableZipURL: URL?
     private var timer: Timer?
-    private var wakeObserver: NSObjectProtocol?
 
     private init() {}
 
@@ -75,53 +79,18 @@ final class Updater {
         return true
     }
 
-    // MARK: - Failed-install guard
-
-    // Applying is attempted at most twice per version on the automatic paths
-    // (launch, wake); without this, a swap that keeps failing would relaunch
-    // and re-terminate forever. "Check Now" and the menu item always retry.
-    private static let attemptVersionKey = "com.kamenlevi.sleight.updateAttemptVersion"
-    private static let attemptCountKey = "com.kamenlevi.sleight.updateAttemptCount"
-
-    private func applyAttempts(for version: String) -> Int {
-        guard UserDefaults.standard.string(forKey: Self.attemptVersionKey) == version else { return 0 }
-        return UserDefaults.standard.integer(forKey: Self.attemptCountKey)
-    }
-
-    private func recordApplyAttempt(for version: String) {
-        let count = applyAttempts(for: version) + 1
-        UserDefaults.standard.set(version, forKey: Self.attemptVersionKey)
-        UserDefaults.standard.set(count, forKey: Self.attemptCountKey)
-    }
-
-    private func clearApplyAttempts() {
-        UserDefaults.standard.removeObject(forKey: Self.attemptVersionKey)
-        UserDefaults.standard.removeObject(forKey: Self.attemptCountKey)
-    }
-
     func start() {
-        // Reaching this version means any pending install of it succeeded.
-        if UserDefaults.standard.string(forKey: Self.attemptVersionKey) == Self.currentVersion {
-            clearApplyAttempts()
-        }
-
-        // An update staged in a previous run (e.g. quit before the Mac ever
-        // slept) applies right away at launch.
+        // An update downloaded in a previous run stays waiting for the user's
+        // click — it is never applied behind their back.
         if let staged = stagedVersion(), Self.isVersion(staged, newerThan: Self.currentVersion) {
-            if applyAttempts(for: staged) >= 2 {
-                SleightLog.log("updater: \(staged) failed to install twice — not retrying automatically (see updater-swap lines above)")
-                state = .failed("\(staged) could not be installed automatically — use Check Now to retry")
-            } else {
-                SleightLog.log("updater: applying \(staged) staged in a previous run")
-                state = .staged(staged)
-                applyStagedUpdate()
-                return
-            }
+            SleightLog.log("updater: \(staged) is downloaded and waiting — install from the menu or Settings")
+            state = .staged(staged)
         } else {
             try? FileManager.default.removeItem(at: stagingDir)
         }
 
-        // First check shortly after launch, then twice a day.
+        // First check shortly after launch, then twice a day. Checks only
+        // look — they never download or install anything.
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(15))
             await self?.check()
@@ -131,30 +100,14 @@ final class Updater {
         }
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
-
-        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didWakeNotification,
-            object: nil,
-            queue: .main
-        ) { _ in
-            Task { @MainActor in
-                if case .staged = Updater.shared.state,
-                   ConfigStore.shared.config.autoUpdate {
-                    Updater.shared.applyStagedUpdate()
-                }
-            }
-        }
     }
 
-    /// `userInitiated` = triggered by the "Check Now" button: if a newer
-    /// version is found, install it right away (relaunch) instead of waiting
-    /// for the next wake from sleep.
+    /// Looks for a newer release and reports it. Checking never downloads or
+    /// installs anything — both "Check Now" and the background timer stop at
+    /// `.available`; installing takes a separate explicit click.
     func check(userInitiated: Bool = false) async {
         if case .downloading = state { return }
-        if case .staged = state {
-            if userInitiated { applyStagedUpdate(force: true) }
-            return
-        }
+        if case .staged = state { return }
         state = .checking
         do {
             var request = URLRequest(url: URL(string:
@@ -180,18 +133,27 @@ final class Updater {
                 state = .upToDate
                 return
             }
-            SleightLog.log("updater: downloading \(latest) (userInitiated=\(userInitiated))")
-            state = .downloading(latest)
-            try await download(zipURL, version: latest)
-            state = .staged(latest)
-            if userInitiated {
-                SleightLog.log("updater: \(latest) staged, installing now")
-                applyStagedUpdate(force: true)
-            } else {
-                SleightLog.log("updater: \(latest) staged, applies on wake or via menu")
-            }
+            availableZipURL = zipURL
+            SleightLog.log("updater: \(latest) is available — waiting for the user (userInitiated=\(userInitiated))")
+            state = .available(latest)
         } catch {
             SleightLog.log("updater: check failed: \(error.localizedDescription)")
+            state = .failed(error.localizedDescription)
+        }
+    }
+
+    /// The user clicked Install on an `.available` version: download, stage,
+    /// swap, relaunch.
+    func installAvailable() async {
+        guard case .available(let version) = state, let zipURL = availableZipURL else { return }
+        SleightLog.log("updater: downloading \(version)")
+        state = .downloading(version)
+        do {
+            try await download(zipURL, version: version)
+            state = .staged(version)
+            applyStagedUpdate()
+        } catch {
+            SleightLog.log("updater: download of \(version) failed: \(error.localizedDescription)")
             state = .failed(error.localizedDescription)
         }
     }
@@ -215,17 +177,11 @@ final class Updater {
 
     /// Swap the staged app into place and relaunch. Runs the swap in a
     /// detached shell so replacing our own bundle mid-execution is safe.
-    /// `force` (user-initiated) bypasses the two-strikes guard.
-    func applyStagedUpdate(force: Bool = false) {
+    /// Only ever reached from a user click.
+    func applyStagedUpdate() {
         guard case .staged(let version) = state else { return }
-        if !force, applyAttempts(for: version) >= 2 {
-            SleightLog.log("updater: not auto-applying \(version) again after two failed installs")
-            state = .failed("\(version) could not be installed automatically — use Check Now to retry")
-            return
-        }
-        recordApplyAttempt(for: version)
         let destination = installDestination
-        SleightLog.log("updater: applying staged \(version) to \(destination.path) (translocated=\(Self.isTranslocated), attempt \(applyAttempts(for: version)))")
+        SleightLog.log("updater: applying staged \(version) to \(destination.path) (translocated=\(Self.isTranslocated))")
         runDetachedSwap(from: stagedAppURL, to: destination, clearStagingOnSuccess: true)
         NSApp.terminate(nil)
     }

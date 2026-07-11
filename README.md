@@ -32,7 +32,9 @@ Details that make it feel native:
 - **Scroll suppression** — while a dial is active, an event tap swallows the scroll events macOS would otherwise send, so turning the volume never scrolls the page under your cursor.
 - **Smooth values** — volume is set directly through CoreAudio with sub-percent resolution instead of the 16 coarse steps of the volume keys.
 - **A HUD** that appears while you adjust and fades away.
-- **A live visualizer** in Settings that shows every raw touch in real time.
+- **A live visualizer** in Settings that shows every raw touch in real time —
+  with a button to [Menagerie](https://github.com/kamenlevi/Menagerie), the
+  same idea grown into a toy full of cardboard creatures.
 - Handles Bluetooth trackpad disconnects/reconnects and sleep/wake automatically.
 
 ## Install
@@ -97,10 +99,11 @@ pad edges, which scrolling never uses.
 
 ## Updating
 
-Sleight updates itself: it checks GitHub Releases twice a day, downloads new
-versions quietly, and installs them the next time your Mac wakes from sleep
-(or immediately via the menu bar / Settings → General). Toggleable in
-Settings.
+Sleight never updates itself behind your back. It checks GitHub Releases
+twice a day and, when a newer version exists, says so in the menu bar and in
+Settings → General — nothing is downloaded or installed until you click
+Install there (the app relaunches once, keeping all your settings and
+permissions).
 
 To update manually from source at any time:
 

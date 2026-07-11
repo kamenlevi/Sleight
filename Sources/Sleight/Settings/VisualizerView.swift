@@ -53,6 +53,12 @@ struct VisualizerView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 Spacer()
+                Button {
+                    openMenagerie()
+                } label: {
+                    Label("Menagerie — this, as a game", systemImage: "fish")
+                }
+                .help("Cardboard creatures that live under your fingers — koi, fireflies, puppets. Opens Menagerie (or its download page).")
             }
         }
         .padding(24)
@@ -66,6 +72,27 @@ struct VisualizerView: View {
         }
         .onDisappear {
             GestureCoordinator.shared.visualizerSink = nil
+        }
+    }
+
+    /// Menagerie is this visualizer grown into a toy — a separate app by the
+    /// same author. Opening it via its URL scheme both launches it and brings
+    /// the games window forward if it's already running (and tells it it was
+    /// opened from Sleight); older builds without the scheme are launched
+    /// directly, and with no install at all we point at the download page.
+    private func openMenagerie() {
+        let fromSleight = URL(string: "menagerie://from-sleight")!
+        if NSWorkspace.shared.urlForApplication(toOpen: fromSleight) != nil {
+            NSWorkspace.shared.open(fromSleight)
+        } else if let app = NSWorkspace.shared.urlForApplication(
+            withBundleIdentifier: "com.kamenlevi.menagerie") {
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.arguments = ["--from-sleight"]
+            configuration.activates = true
+            NSWorkspace.shared.openApplication(at: app, configuration: configuration)
+        } else {
+            NSWorkspace.shared.open(
+                URL(string: "https://github.com/kamenlevi/Menagerie/releases/latest")!)
         }
     }
 }

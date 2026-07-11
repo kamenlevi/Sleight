@@ -311,8 +311,6 @@ struct SleightConfig: Codable, Equatable {
     var freezeScreen = true
     /// Additionally pin the pointer in place while a gesture is active.
     var freezePointer = false
-    /// Install downloaded updates automatically when the Mac wakes.
-    var autoUpdate = true
     /// Levels the keyboard-backlight cycle steps through, as actual hardware
     /// fractions (shown as real percentages in the HUD). User-editable; a
     /// level can be disabled (kept in the list but skipped by the cycle).
@@ -331,7 +329,7 @@ struct SleightConfig: Codable, Equatable {
         case twoFingerDial, threeFingerDial, slider
         case threeFingerTap, fourFingerTap, fiveFingerTap
         case customGestures, shortcuts, automations
-        case hapticDetents, showHUD, freezeScreen, freezePointer, autoUpdate
+        case hapticDetents, showHUD, freezeScreen, freezePointer
         case keyboardLevels, animationSpeed, animateHUDReappear, enabled
     }
 }
@@ -355,7 +353,6 @@ extension SleightConfig {
         showHUD = (try? c.decodeIfPresent(Bool.self, forKey: .showHUD)) ?? nil ?? defaults.showHUD
         freezeScreen = (try? c.decodeIfPresent(Bool.self, forKey: .freezeScreen)) ?? nil ?? defaults.freezeScreen
         freezePointer = (try? c.decodeIfPresent(Bool.self, forKey: .freezePointer)) ?? nil ?? defaults.freezePointer
-        autoUpdate = (try? c.decodeIfPresent(Bool.self, forKey: .autoUpdate)) ?? nil ?? defaults.autoUpdate
         // Accept the new [KeyboardLevel] shape, or migrate the old [Double].
         if let levels = try? c.decode([KeyboardLevel].self, forKey: .keyboardLevels) {
             keyboardLevels = levels

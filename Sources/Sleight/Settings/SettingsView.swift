@@ -203,13 +203,16 @@ struct GeneralSettingsView: View {
             }
 
             Section {
-                Toggle("Install updates automatically when the Mac wakes", isOn: $store.config.autoUpdate)
                 LabeledContent("Version") {
                     Text(Updater.currentVersion)
                 }
                 UpdateStatusRow()
             } header: {
                 Text("Updates")
+            } footer: {
+                Text("Sleight looks for new versions twice a day and tells you here (and in the menu bar) when one exists — nothing is downloaded or installed until you click.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Trackpad") {
@@ -416,17 +419,20 @@ private struct UpdateStatusRow: View {
         HStack {
             switch updater.state {
             case .idle:
-                Text("Updates are checked twice a day.")
+                Text("No update check has run yet.")
                     .foregroundStyle(.secondary)
             case .checking:
                 Text("Checking…").foregroundStyle(.secondary)
             case .upToDate:
                 Text("You're on the latest version.")
                     .foregroundStyle(.secondary)
+            case .available(let version):
+                Text("\(version) is available.")
+                    .foregroundStyle(.green)
             case .downloading(let version):
                 Text("Downloading \(version)…").foregroundStyle(.secondary)
             case .staged(let version):
-                Text("\(version) ready — installing…")
+                Text("\(version) is downloaded and ready.")
                     .foregroundStyle(.green)
             case .failed(let message):
                 Text("Check failed: \(message)")
@@ -434,6 +440,16 @@ private struct UpdateStatusRow: View {
                     .lineLimit(2)
             }
             Spacer()
+            if case .available = updater.state {
+                Button("Install & Relaunch") {
+                    Task { await updater.installAvailable() }
+                }
+            }
+            if case .staged = updater.state {
+                Button("Install & Relaunch") {
+                    updater.applyStagedUpdate()
+                }
+            }
             Button("Check Now") {
                 Task { await updater.check(userInitiated: true) }
             }

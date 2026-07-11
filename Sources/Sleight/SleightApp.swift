@@ -18,9 +18,15 @@ struct SleightApp: App {
             Button("Trackpad Visualizer") {
                 SettingsWindow.show(tab: .visualizer)
             }
+            if case .available(let version) = updater.state {
+                Divider()
+                Button("Update to \(version)…") {
+                    Task { await updater.installAvailable() }
+                }
+            }
             if case .staged(let version) = updater.state {
                 Divider()
-                Button("Restart to Update to \(version)") {
+                Button("Install Update \(version)") {
                     updater.applyStagedUpdate()
                 }
             }
