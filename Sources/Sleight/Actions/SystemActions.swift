@@ -64,12 +64,6 @@ enum SystemActions {
 
     // MARK: - Screen & session
 
-    /// Real Lock Screen (the ⌃⌘Q one), via a synthetic keystroke — the only
-    /// non-private way in. Needs Accessibility, which Sleight already uses.
-    static func lockScreen() {
-        pressKey(12, flags: [.maskCommand, .maskControl]) // ⌃⌘Q
-    }
-
     static func sleepDisplays() { run("/usr/bin/pmset", ["displaysleepnow"]) }
     static func sleepMac() { run("/usr/bin/pmset", ["sleepnow"]) }
 
@@ -81,12 +75,6 @@ enum SystemActions {
     // macOS — it must be launched through LaunchServices.
     static func missionControl() {
         run("/usr/bin/open", ["-b", "com.apple.exposelauncher"])
-    }
-
-    /// Show Desktop = a synthetic F11, the default macOS binding (the
-    /// exposelauncher argument trick no longer verifiably works).
-    static func showDesktop() {
-        pressKey(103) // F11
     }
 
     private static func pressKey(_ keyCode: CGKeyCode, flags: CGEventFlags = []) {
@@ -110,6 +98,47 @@ enum SystemActions {
     /// macOS may ask for Screen Recording on first use.
     static func screenshotArea() {
         run("/usr/sbin/screencapture", ["-i", "-c"])
+    }
+
+    /// The whole screen to the clipboard, no interaction.
+    static func screenshotScreen() {
+        run("/usr/sbin/screencapture", ["-c"])
+    }
+
+    /// Asks Finder to empty the trash (one-time automation consent).
+    static func emptyTrash() {
+        run("/usr/bin/osascript", ["-e", "tell application \"Finder\" to empty trash"])
+    }
+
+    // MARK: - Keystroke actions
+
+    /// Actions that are, honestly, just the system's own keyboard shortcut —
+    /// synthesized the same way as lockScreen. They act on whatever app is
+    /// frontmost, exactly like pressing the keys yourself.
+    static func keystroke(for action: DiscreteAction) -> Bool {
+        let map: [DiscreteAction: (CGKeyCode, CGEventFlags)] = [
+            .appExpose: (125, .maskControl),          // ⌃↓
+            .spaceLeft: (123, .maskControl),          // ⌃←
+            .spaceRight: (124, .maskControl),         // ⌃→
+            .showDesktop: (103, []),                  // F11
+            .spotlight: (49, .maskCommand),           // ⌘Space
+            .browserBack: (33, .maskCommand),         // ⌘[
+            .browserForward: (30, .maskCommand),      // ⌘]
+            .nextTab: (48, .maskControl),             // ⌃Tab
+            .previousTab: (48, [.maskControl, .maskShift]),
+            .newTab: (17, .maskCommand),              // ⌘T
+            .reopenClosedTab: (17, [.maskCommand, .maskShift]),
+            .closeTabOrWindow: (13, .maskCommand),    // ⌘W
+            .minimizeWindow: (46, .maskCommand),      // ⌘M
+            .hideApp: (4, .maskCommand),              // ⌘H
+            .fullScreenToggle: (3, [.maskControl, .maskCommand]), // ⌃⌘F
+            .zoomIn: (24, .maskCommand),              // ⌘=
+            .zoomOut: (27, .maskCommand),             // ⌘-
+            .lockScreen: (12, [.maskControl, .maskCommand]),      // ⌃⌘Q
+        ]
+        guard let (key, flags) = map[action] else { return false }
+        pressKey(key, flags: flags)
+        return true
     }
 
     private static func run(_ path: String, _ arguments: [String]) {

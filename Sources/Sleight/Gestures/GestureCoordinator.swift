@@ -293,10 +293,20 @@ final class GestureCoordinator: @unchecked Sendable {
     }
 
     /// A brief HUD confirmation for actions whose effect isn't otherwise
-    /// visible — the user should never wonder whether the gesture landed.
+    /// visible. Strictly opt-in (Settings → General → Feedback): by default
+    /// actions run silently, with nothing to distract from what you're doing.
     private func flash(_ symbol: String, _ text: String) {
-        guard config.showHUD else { return }
+        guard config.showHUD, config.actionConfirmations else { return }
         Task { @MainActor in HUDController.shared.flash(symbol: symbol, text: text) }
+    }
+
+    /// The level HUD (same bezel as the dials), used by the step actions.
+    private func showLevel(_ control: ContinuousControl, _ value: Float) {
+        guard config.showHUD else { return }
+        Task { @MainActor in
+            HUDController.shared.show(control: control, value: value, available: true)
+            HUDController.shared.scheduleHide()
+        }
     }
 
     func performDiscrete(action: DiscreteAction, appPath: String, shellCommand: String) {
@@ -378,14 +388,9 @@ final class GestureCoordinator: @unchecked Sendable {
             try? process.run()
         case .cycleInputSource:
             Task { @MainActor in
-                if let name = SystemActions.cycleInputSource() {
-                    if self.config.showHUD {
-                        HUDController.shared.flash(symbol: "globe", text: "Keyboard: \(name)")
-                    }
-                } else if self.config.showHUD {
-                    HUDController.shared.flash(symbol: "globe",
-                                               text: "Only one keyboard language is enabled")
-                }
+                let name = SystemActions.cycleInputSource()
+                self.flash("globe", name.map { "Keyboard: \($0)" }
+                    ?? "Only one keyboard language is enabled")
             }
         case .micMuteToggle:
             if let muted = SystemActions.toggleMicMute() {
@@ -394,8 +399,21 @@ final class GestureCoordinator: @unchecked Sendable {
             } else {
                 flash("mic.badge.xmark", "This microphone has no mute control")
             }
-        case .lockScreen:
-            SystemActions.lockScreen()
+        case .volumeUp, .volumeDown:
+            let current = SystemVolume.get() ?? 0
+            let next = min(1, max(0, current + (action == .volumeUp ? 1 : -1) * Float(1.0 / 16)))
+            SystemVolume.set(next)
+            showLevel(.volume, next)
+        case .displayBrightnessUp, .displayBrightnessDown:
+            let current = DisplayBrightness.get() ?? 0
+            let next = min(1, max(0, current + (action == .displayBrightnessUp ? 1 : -1) * Float(1.0 / 16)))
+            DisplayBrightness.set(next)
+            showLevel(.displayBrightness, next)
+        case .keyboardBrightnessUp, .keyboardBrightnessDown:
+            let current = KeyboardBacklight.shared.get() ?? 0
+            let next = min(1, max(0, current + (action == .keyboardBrightnessUp ? 1 : -1) * Float(0.1)))
+            KeyboardBacklight.shared.set(next)
+            showLevel(.keyboardBrightness, next)
         case .sleepDisplays:
             SystemActions.sleepDisplays()
         case .sleepMac:
@@ -404,12 +422,20 @@ final class GestureCoordinator: @unchecked Sendable {
             SystemActions.startScreenSaver()
         case .missionControl:
             SystemActions.missionControl()
-        case .showDesktop:
-            SystemActions.showDesktop()
         case .toggleDarkMode:
             SystemActions.toggleDarkMode()
         case .screenshotArea:
             SystemActions.screenshotArea()
+        case .screenshotScreen:
+            SystemActions.screenshotScreen()
+        case .emptyTrash:
+            SystemActions.emptyTrash()
+        case .lockScreen, .showDesktop, .appExpose, .spaceLeft, .spaceRight,
+             .spotlight, .browserBack, .browserForward, .nextTab, .previousTab,
+             .newTab, .reopenClosedTab, .closeTabOrWindow, .minimizeWindow,
+             .hideApp, .fullScreenToggle, .zoomIn, .zoomOut:
+            // The system's own keyboard shortcut, synthesized.
+            _ = SystemActions.keystroke(for: action)
         }
     }
 }

@@ -45,6 +45,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var permissionPoll: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Dev aid: `Sleight --render-picker <dir>` renders the action picker
+        // panel to PNGs and exits, for eyeballing without clicking through.
+        if let flagIndex = CommandLine.arguments.firstIndex(of: "--render-picker"),
+           CommandLine.arguments.indices.contains(flagIndex + 1) {
+            let dir = URL(fileURLWithPath: CommandLine.arguments[flagIndex + 1], isDirectory: true)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            MainActor.assumeIsolated {
+                let variants: [(String, DiscreteAction)] = [
+                    ("picker-collapsed", .playPause), ("picker-expanded", .lockScreen),
+                ]
+                for (name, selection) in variants {
+                    let view = ActionCatalog(selection: .constant(selection),
+                                             includeOff: true, open: .constant(true))
+                        .background(.background)
+                    let renderer = ImageRenderer(content: view)
+                    renderer.scale = 2
+                    if let image = renderer.nsImage, let tiff = image.tiffRepresentation,
+                       let rep = NSBitmapImageRep(data: tiff),
+                       let png = rep.representation(using: .png, properties: [:]) {
+                        try? png.write(to: dir.appendingPathComponent("\(name).png"))
+                    }
+                }
+            }
+            exit(0)
+        }
+
         // Menu-bar-only even when running unbundled during development.
         NSApp.setActivationPolicy(.accessory)
 

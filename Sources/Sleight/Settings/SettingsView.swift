@@ -132,10 +132,11 @@ struct GeneralSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
                 Toggle("Animate the bar on a reappearing popup", isOn: $store.config.animateHUDReappear)
+                Toggle("Flash a confirmation when an action fires", isOn: $store.config.actionConfirmations)
             } header: {
                 Text("Feedback")
             } footer: {
-                Text("Detents make the dial click softly every few percent, like a physical knob. Animation speed scales how quickly the HUD fades and its bar moves — higher is snappier. When the last option is off, a popup that reappears after fading shows its value immediately instead of sliding from the old one (e.g. 100 → 0).")
+                Text("Detents make the dial click softly every few percent, like a physical knob. Animation speed scales how quickly the HUD fades and its bar moves — higher is snappier. When the reappearing-popup option is off, a popup that reappears after fading shows its value immediately instead of sliding from the old one (e.g. 100 → 0). Action confirmations briefly name otherwise-invisible actions (\"Opening Safari\") in the HUD — off means taps and shortcuts run completely silently.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

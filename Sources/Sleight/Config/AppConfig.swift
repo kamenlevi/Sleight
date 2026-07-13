@@ -50,6 +50,30 @@ enum DiscreteAction: String, Codable, CaseIterable, Identifiable {
     case showDesktop
     case toggleDarkMode
     case screenshotArea
+    case screenshotScreen
+    case volumeUp
+    case volumeDown
+    case displayBrightnessUp
+    case displayBrightnessDown
+    case keyboardBrightnessUp
+    case keyboardBrightnessDown
+    case appExpose
+    case spaceLeft
+    case spaceRight
+    case spotlight
+    case browserBack
+    case browserForward
+    case nextTab
+    case previousTab
+    case newTab
+    case reopenClosedTab
+    case closeTabOrWindow
+    case minimizeWindow
+    case hideApp
+    case fullScreenToggle
+    case zoomIn
+    case zoomOut
+    case emptyTrash
 
     var id: String { rawValue }
 
@@ -59,11 +83,19 @@ enum DiscreteAction: String, Codable, CaseIterable, Identifiable {
         .keyboardBrightnessCycle, .launchApp, .shellCommand,
     ]
 
-    /// Everything else, listed under "More" at the bottom of the pickers.
+    /// Everything else, revealed by the picker's "More…" row (searchable).
     static let more: [DiscreteAction] = [
-        .cycleInputSource, .micMuteToggle, .lockScreen, .sleepDisplays,
-        .sleepMac, .startScreenSaver, .missionControl, .showDesktop,
-        .toggleDarkMode, .screenshotArea,
+        .cycleInputSource, .micMuteToggle,
+        .volumeUp, .volumeDown, .displayBrightnessUp, .displayBrightnessDown,
+        .keyboardBrightnessUp, .keyboardBrightnessDown,
+        .missionControl, .appExpose, .showDesktop, .spaceLeft, .spaceRight,
+        .spotlight,
+        .browserBack, .browserForward, .nextTab, .previousTab, .newTab,
+        .reopenClosedTab, .closeTabOrWindow, .minimizeWindow, .hideApp,
+        .fullScreenToggle, .zoomIn, .zoomOut,
+        .screenshotArea, .screenshotScreen,
+        .lockScreen, .sleepDisplays, .sleepMac, .startScreenSaver,
+        .toggleDarkMode, .emptyTrash,
     ]
 
     var label: String {
@@ -86,6 +118,30 @@ enum DiscreteAction: String, Codable, CaseIterable, Identifiable {
         case .showDesktop: "Show Desktop"
         case .toggleDarkMode: "Toggle Light / Dark Mode"
         case .screenshotArea: "Screenshot Area to Clipboard"
+        case .screenshotScreen: "Screenshot Screen to Clipboard"
+        case .volumeUp: "Volume Up"
+        case .volumeDown: "Volume Down"
+        case .displayBrightnessUp: "Display Brightness Up"
+        case .displayBrightnessDown: "Display Brightness Down"
+        case .keyboardBrightnessUp: "Keyboard Backlight Up"
+        case .keyboardBrightnessDown: "Keyboard Backlight Down"
+        case .appExpose: "App Exposé"
+        case .spaceLeft: "Move a Space Left"
+        case .spaceRight: "Move a Space Right"
+        case .spotlight: "Spotlight Search"
+        case .browserBack: "Back (⌘[)"
+        case .browserForward: "Forward (⌘])"
+        case .nextTab: "Next Tab"
+        case .previousTab: "Previous Tab"
+        case .newTab: "New Tab"
+        case .reopenClosedTab: "Reopen Closed Tab"
+        case .closeTabOrWindow: "Close Tab / Window (⌘W)"
+        case .minimizeWindow: "Minimize Window"
+        case .hideApp: "Hide Current App"
+        case .fullScreenToggle: "Toggle Full Screen"
+        case .zoomIn: "Zoom In (⌘+)"
+        case .zoomOut: "Zoom Out (⌘−)"
+        case .emptyTrash: "Empty Trash"
         }
     }
 
@@ -109,6 +165,30 @@ enum DiscreteAction: String, Codable, CaseIterable, Identifiable {
         case .showDesktop: "desktopcomputer"
         case .toggleDarkMode: "circle.lefthalf.filled"
         case .screenshotArea: "camera.viewfinder"
+        case .screenshotScreen: "camera.fill"
+        case .volumeUp: "speaker.wave.3.fill"
+        case .volumeDown: "speaker.wave.1.fill"
+        case .displayBrightnessUp: "sun.max.fill"
+        case .displayBrightnessDown: "sun.min.fill"
+        case .keyboardBrightnessUp: "light.max"
+        case .keyboardBrightnessDown: "light.min"
+        case .appExpose: "square.grid.2x2"
+        case .spaceLeft: "arrow.left.square"
+        case .spaceRight: "arrow.right.square"
+        case .spotlight: "magnifyingglass"
+        case .browserBack: "chevron.backward"
+        case .browserForward: "chevron.forward"
+        case .nextTab: "arrow.right.to.line"
+        case .previousTab: "arrow.left.to.line"
+        case .newTab: "plus.square"
+        case .reopenClosedTab: "arrow.uturn.backward"
+        case .closeTabOrWindow: "xmark.square"
+        case .minimizeWindow: "arrow.down.right.square"
+        case .hideApp: "eye.slash"
+        case .fullScreenToggle: "arrow.up.left.and.arrow.down.right"
+        case .zoomIn: "plus.magnifyingglass"
+        case .zoomOut: "minus.magnifyingglass"
+        case .emptyTrash: "trash"
         }
     }
 }
@@ -349,6 +429,10 @@ struct SleightConfig: Codable, Equatable {
     var automations: [Automation] = []
     var hapticDetents = true
     var showHUD = true
+    /// Flash a short HUD confirmation when a tap/shortcut fires an action
+    /// with no visible effect of its own. Off by default — actions run
+    /// silently unless the user opts in.
+    var actionConfirmations = false
     /// Swallow scroll/swipe input the moment a gesture posture is detected,
     /// so pages can't move or navigate back/forward while a gesture forms.
     /// (This blocks input, not rendering — videos keep playing.)
@@ -373,7 +457,7 @@ struct SleightConfig: Codable, Equatable {
         case twoFingerDial, threeFingerDial, slider
         case threeFingerTap, fourFingerTap, fiveFingerTap
         case customGestures, shortcuts, automations
-        case hapticDetents, showHUD, freezeScreen, freezePointer
+        case hapticDetents, showHUD, actionConfirmations, freezeScreen, freezePointer
         case keyboardLevels, animationSpeed, animateHUDReappear, enabled
     }
 }
@@ -395,6 +479,7 @@ extension SleightConfig {
         automations = (try? c.decodeIfPresent([Automation].self, forKey: .automations)) ?? nil ?? defaults.automations
         hapticDetents = (try? c.decodeIfPresent(Bool.self, forKey: .hapticDetents)) ?? nil ?? defaults.hapticDetents
         showHUD = (try? c.decodeIfPresent(Bool.self, forKey: .showHUD)) ?? nil ?? defaults.showHUD
+        actionConfirmations = (try? c.decodeIfPresent(Bool.self, forKey: .actionConfirmations)) ?? nil ?? defaults.actionConfirmations
         freezeScreen = (try? c.decodeIfPresent(Bool.self, forKey: .freezeScreen)) ?? nil ?? defaults.freezeScreen
         freezePointer = (try? c.decodeIfPresent(Bool.self, forKey: .freezePointer)) ?? nil ?? defaults.freezePointer
         // Accept the new [KeyboardLevel] shape, or migrate the old [Double].
