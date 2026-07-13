@@ -54,6 +54,9 @@ struct CustomGesturesView: View {
                     }
                     .tag(gesture.id)
                 }
+                .onMove { indices, newOffset in
+                    store.config.customGestures.move(fromOffsets: indices, toOffset: newOffset)
+                }
             }
             .listStyle(.sidebar)
 

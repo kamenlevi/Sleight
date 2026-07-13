@@ -45,6 +45,9 @@ Details that make it feel native:
   app: play/pause *your music player*, no matter what else is playing, or
   send ⌘W / back / zoom to an app even while it's in the background. If the
   chosen app isn't running, the action deliberately does nothing.
+- **Drag to reorder** — grab the ☰ handle on any shortcut or automation (or a
+  custom gesture in its list) and drag it up or down; the rest slide out of the
+  way, like reordering a playlist. The order you set is the order they're saved.
 - **A live visualizer** in Settings that shows every raw touch in real time —
   with a button to [Menagerie](https://github.com/kamenlevi/Menagerie), the
   same idea grown into a toy full of cardboard creatures.

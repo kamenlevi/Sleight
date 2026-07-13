@@ -4,6 +4,7 @@ import SwiftUI
 /// action — set a level, mute, media keys, launch an app, run a command.
 struct AutomationView: View {
     @State private var store = ConfigStore.shared
+    @State private var dragging: UUID?
 
     var body: some View {
         Form {
@@ -24,10 +25,12 @@ struct AutomationView: View {
                 Section {
                     AutomationRow(
                         automation: bindingFor(automation.id),
+                        dragging: $dragging,
                         onRemove: {
                             store.config.automations.removeAll { $0.id == automation.id }
                         }
                     )
+                    .reorderable(automation, in: $store.config.automations, dragging: $dragging)
                 }
             }
 
@@ -62,6 +65,7 @@ struct AutomationView: View {
 
 private struct AutomationRow: View {
     @Binding var automation: Automation
+    @Binding var dragging: UUID?
     let onRemove: () -> Void
 
     private var timeBinding: Binding<Date> {
@@ -82,6 +86,11 @@ private struct AutomationRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
+                DragHandle()
+                    .onDrag {
+                        dragging = automation.id
+                        return NSItemProvider(object: automation.id.uuidString as NSString)
+                    }
                 Image(systemName: automation.action.symbol)
                     .font(.title3)
                     .foregroundStyle(.tint)

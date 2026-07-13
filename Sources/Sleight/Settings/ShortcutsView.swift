@@ -4,6 +4,7 @@ import SwiftUI
 /// about what each combination normally does in macOS.
 struct ShortcutsView: View {
     @State private var store = ConfigStore.shared
+    @State private var dragging: UUID?
 
     var body: some View {
         Form {
@@ -14,9 +15,14 @@ struct ShortcutsView: View {
                         .font(.callout)
                 }
                 ForEach(store.config.shortcuts) { shortcut in
-                    ShortcutRow(binding: binding(for: shortcut.id)) {
-                        store.config.shortcuts.removeAll { $0.id == shortcut.id }
-                    }
+                    ShortcutRow(
+                        binding: binding(for: shortcut.id),
+                        dragging: $dragging,
+                        onDelete: {
+                            store.config.shortcuts.removeAll { $0.id == shortcut.id }
+                        }
+                    )
+                    .reorderable(shortcut, in: $store.config.shortcuts, dragging: $dragging)
                 }
             } header: {
                 Text("Keyboard Shortcuts")
@@ -55,6 +61,7 @@ struct ShortcutsView: View {
 
 private struct ShortcutRow: View {
     @Binding var binding: ShortcutBinding
+    @Binding var dragging: UUID?
     let onDelete: () -> Void
 
     private var conflict: String? {
@@ -65,6 +72,12 @@ private struct ShortcutRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
+                DragHandle()
+                    .onDrag {
+                        dragging = binding.id
+                        return NSItemProvider(object: binding.id.uuidString as NSString)
+                    }
+
                 Toggle("", isOn: $binding.enabled)
                     .labelsHidden()
                     .toggleStyle(.switch)
