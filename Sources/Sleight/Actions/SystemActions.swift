@@ -77,14 +77,19 @@ enum SystemActions {
         run("/usr/bin/open", ["-b", "com.apple.exposelauncher"])
     }
 
-    private static func pressKey(_ keyCode: CGKeyCode, flags: CGEventFlags = []) {
+    private static func pressKey(_ keyCode: CGKeyCode, flags: CGEventFlags = [], pid: pid_t? = nil) {
         let source = CGEventSource(stateID: .hidSystemState)
         let down = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true)
         let up = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false)
         down?.flags = flags
         up?.flags = flags
-        down?.post(tap: .cghidEventTap)
-        up?.post(tap: .cghidEventTap)
+        if let pid {
+            down?.postToPid(pid)
+            up?.postToPid(pid)
+        } else {
+            down?.post(tap: .cghidEventTap)
+            up?.post(tap: .cghidEventTap)
+        }
     }
 
     /// Flips the system appearance. First use asks the user to allow Sleight
@@ -110,12 +115,47 @@ enum SystemActions {
         run("/usr/bin/osascript", ["-e", "tell application \"Finder\" to empty trash"])
     }
 
+    // MARK: - App-targeted actions
+
+    /// Resolve a configured .app path to its running process, if any.
+    private static func runningApp(at path: String) -> NSRunningApplication? {
+        guard let bundleID = Bundle(path: path)?.bundleIdentifier else { return nil }
+        return NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first
+    }
+
+    /// Media command aimed at one specific player, no matter what else is
+    /// playing: scripted directly to that app (first use asks the one-time
+    /// automation consent for it). Command variants cover the different
+    /// dialects — Music/Spotify say "playpause", VLC says "play". If the
+    /// target isn't running, nothing happens — deliberately: controlling
+    /// some *other* player instead would be exactly the bug this avoids.
+    static func mediaCommand(_ variants: [String], appPath: String) {
+        guard let bundleID = Bundle(path: appPath)?.bundleIdentifier else {
+            SleightLog.log("target media: no bundle at \(appPath)")
+            return
+        }
+        guard !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty else {
+            SleightLog.log("target media: \(bundleID) not running — doing nothing")
+            return
+        }
+        let attempts = variants.map { "try\n\($0)\nreturn\nend try" }.joined(separator: "\n")
+        let script = "tell application id \"\(bundleID)\"\n\(attempts)\nend tell"
+        run("/usr/bin/osascript", ["-e", script])
+    }
+
+    static let playPauseVariants = ["playpause", "play"]
+    static let nextTrackVariants = ["next track", "next"]
+    static let previousTrackVariants = ["previous track", "previous"]
+
     // MARK: - Keystroke actions
 
     /// Actions that are, honestly, just the system's own keyboard shortcut —
-    /// synthesized the same way as lockScreen. They act on whatever app is
-    /// frontmost, exactly like pressing the keys yourself.
-    static func keystroke(for action: DiscreteAction) -> Bool {
+    /// synthesized the same way as lockScreen. With no target they act on
+    /// whatever app is frontmost, exactly like pressing the keys yourself;
+    /// with a target the combo is posted straight to that app's process
+    /// (which works for most apps even in the background). A set target
+    /// that isn't running means the action does nothing.
+    static func keystroke(for action: DiscreteAction, toAppAt targetPath: String? = nil) -> Bool {
         let map: [DiscreteAction: (CGKeyCode, CGEventFlags)] = [
             .appExpose: (125, .maskControl),          // ⌃↓
             .spaceLeft: (123, .maskControl),          // ⌃←
@@ -137,7 +177,15 @@ enum SystemActions {
             .lockScreen: (12, [.maskControl, .maskCommand]),      // ⌃⌘Q
         ]
         guard let (key, flags) = map[action] else { return false }
-        pressKey(key, flags: flags)
+        if let targetPath, !targetPath.isEmpty {
+            guard let app = runningApp(at: targetPath) else {
+                SleightLog.log("target keystroke: app at \(targetPath) not running — doing nothing")
+                return true
+            }
+            pressKey(key, flags: flags, pid: app.processIdentifier)
+        } else {
+            pressKey(key, flags: flags)
+        }
         return true
     }
 

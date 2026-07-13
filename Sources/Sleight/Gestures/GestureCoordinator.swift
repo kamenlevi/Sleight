@@ -132,7 +132,7 @@ final class GestureCoordinator: @unchecked Sendable {
             return
         }
         SleightLog.log("shortcut executing action \(binding.action.rawValue)")
-        performDiscrete(action: binding.action, appPath: binding.appPath, shellCommand: binding.shellCommand)
+        performDiscrete(action: binding.action, appPath: binding.appPath, shellCommand: binding.shellCommand, targetApp: binding.targetApp)
     }
 
     func handle(_ frame: TouchFrame) {
@@ -289,7 +289,7 @@ final class GestureCoordinator: @unchecked Sendable {
         case 5: tapConfig = config.fiveFingerTap
         default: return
         }
-        performDiscrete(action: tapConfig.action, appPath: tapConfig.appPath, shellCommand: tapConfig.shellCommand)
+        performDiscrete(action: tapConfig.action, appPath: tapConfig.appPath, shellCommand: tapConfig.shellCommand, targetApp: tapConfig.targetApp)
     }
 
     /// A brief HUD confirmation for actions whose effect isn't otherwise
@@ -309,19 +309,35 @@ final class GestureCoordinator: @unchecked Sendable {
         }
     }
 
-    func performDiscrete(action: DiscreteAction, appPath: String, shellCommand: String) {
+    func performDiscrete(action: DiscreteAction, appPath: String, shellCommand: String,
+                         targetApp: String? = nil) {
+        // A target only applies where it means something.
+        let target = action.supportsAppTarget ? targetApp.flatMap { $0.isEmpty ? nil : $0 } : nil
+        let targetName = target.map { (($0 as NSString).lastPathComponent as NSString).deletingPathExtension }
         switch action {
         case .none:
             break
         case .playPause:
-            Task { @MainActor in MediaKeys.press(MediaKeys.playPause) }
-            flash(action.symbol, "Play / Pause")
+            if let target {
+                SystemActions.mediaCommand(SystemActions.playPauseVariants, appPath: target)
+            } else {
+                Task { @MainActor in MediaKeys.press(MediaKeys.playPause) }
+            }
+            flash(action.symbol, targetName.map { "Play / Pause — \($0)" } ?? "Play / Pause")
         case .nextTrack:
-            Task { @MainActor in MediaKeys.press(MediaKeys.next) }
-            flash(action.symbol, "Next Track")
+            if let target {
+                SystemActions.mediaCommand(SystemActions.nextTrackVariants, appPath: target)
+            } else {
+                Task { @MainActor in MediaKeys.press(MediaKeys.next) }
+            }
+            flash(action.symbol, targetName.map { "Next Track — \($0)" } ?? "Next Track")
         case .previousTrack:
-            Task { @MainActor in MediaKeys.press(MediaKeys.previous) }
-            flash(action.symbol, "Previous Track")
+            if let target {
+                SystemActions.mediaCommand(SystemActions.previousTrackVariants, appPath: target)
+            } else {
+                Task { @MainActor in MediaKeys.press(MediaKeys.previous) }
+            }
+            flash(action.symbol, targetName.map { "Previous Track — \($0)" } ?? "Previous Track")
         case .muteToggle:
             let muted = SystemVolume.isMuted() ?? false
             SystemVolume.setMuted(!muted)
@@ -434,8 +450,9 @@ final class GestureCoordinator: @unchecked Sendable {
              .spotlight, .browserBack, .browserForward, .nextTab, .previousTab,
              .newTab, .reopenClosedTab, .closeTabOrWindow, .minimizeWindow,
              .hideApp, .fullScreenToggle, .zoomIn, .zoomOut:
-            // The system's own keyboard shortcut, synthesized.
-            _ = SystemActions.keystroke(for: action)
+            // The system's own keyboard shortcut, synthesized — into one
+            // specific app's event queue when a target is set.
+            _ = SystemActions.keystroke(for: action, toAppAt: target)
         }
     }
 }

@@ -692,6 +692,10 @@ private struct TapRow: View {
                     .textFieldStyle(.roundedBorder)
                     .font(.system(.callout, design: .monospaced))
             }
+
+            if config.action.supportsAppTarget {
+                TargetAppRow(targetApp: $config.targetApp)
+            }
         }
     }
 }

@@ -105,6 +105,10 @@ private struct ShortcutRow: View {
                     .font(.system(.callout, design: .monospaced))
             }
 
+            if binding.action.supportsAppTarget {
+                TargetAppRow(targetApp: $binding.targetApp)
+            }
+
             if let conflict {
                 Label(conflict, systemImage: "exclamationmark.triangle.fill")
                     .font(.footnote)

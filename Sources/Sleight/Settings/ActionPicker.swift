@@ -1,4 +1,53 @@
+import AppKit
 import SwiftUI
+
+/// Shown under the action picker for actions that can be aimed at one
+/// specific app (see DiscreteAction.supportsAppTarget): media commands go
+/// straight to that player no matter what else is playing; keystroke
+/// actions are delivered to that app even while it's in the background.
+/// If the chosen app isn't running, the action deliberately does nothing.
+struct TargetAppRow: View {
+    @Binding var targetApp: String?
+
+    private var appName: String? {
+        targetApp.flatMap { $0.isEmpty ? nil : $0 }
+            .map { (($0 as NSString).lastPathComponent as NSString).deletingPathExtension }
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "scope")
+                .foregroundStyle(.secondary)
+                .font(.callout)
+            Text(appName.map { "Only \($0)" } ?? "Whatever app is active")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button(appName == nil ? "Only in App…" : "Change…") { choose() }
+                .controlSize(.small)
+            if appName != nil {
+                Button {
+                    targetApp = nil
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .help("Back to system-wide")
+            }
+        }
+        .help("Aim this action at one specific app — e.g. play/pause only your music player, no matter what else is playing. Does nothing when that app isn't running.")
+    }
+
+    private func choose() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.application]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        if panel.runModal() == .OK, let url = panel.url {
+            targetApp = url.path
+        }
+    }
+}
 
 /// The shared action picker used by taps, shortcuts and custom gestures.
 /// Looks like a popup button; opens a panel with the everyday actions on

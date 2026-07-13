@@ -41,6 +41,10 @@ Details that make it feel native:
   window management, screenshots, lock/sleep/screen saver, light/dark mode,
   empty trash, launch any app, or run a shell command. The picker shows the
   everyday ones; **More…** opens the searchable full list.
+- **App-targeted actions** — aim a media or keystroke action at one specific
+  app: play/pause *your music player*, no matter what else is playing, or
+  send ⌘W / back / zoom to an app even while it's in the background. If the
+  chosen app isn't running, the action deliberately does nothing.
 - **A live visualizer** in Settings that shows every raw touch in real time —
   with a button to [Menagerie](https://github.com/kamenlevi/Menagerie), the
   same idea grown into a toy full of cardboard creatures.

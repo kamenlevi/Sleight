@@ -63,11 +63,11 @@ final class AutomationScheduler {
         case .unmute:
             SystemVolume.setMuted(false)
         case .playPause:
-            GestureCoordinator.shared.performDiscrete(action: .playPause, appPath: "", shellCommand: "")
+            GestureCoordinator.shared.performDiscrete(action: .playPause, appPath: "", shellCommand: "", targetApp: job.targetApp)
         case .nextTrack:
-            GestureCoordinator.shared.performDiscrete(action: .nextTrack, appPath: "", shellCommand: "")
+            GestureCoordinator.shared.performDiscrete(action: .nextTrack, appPath: "", shellCommand: "", targetApp: job.targetApp)
         case .previousTrack:
-            GestureCoordinator.shared.performDiscrete(action: .previousTrack, appPath: "", shellCommand: "")
+            GestureCoordinator.shared.performDiscrete(action: .previousTrack, appPath: "", shellCommand: "", targetApp: job.targetApp)
         case .keyboardBrightnessCycle:
             GestureCoordinator.shared.performDiscrete(action: .keyboardBrightnessCycle, appPath: "", shellCommand: "")
         case .launchApp:

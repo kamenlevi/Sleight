@@ -220,6 +220,10 @@ private struct GestureEditor: View {
                             .textFieldStyle(.roundedBorder)
                             .font(.system(.callout, design: .monospaced))
                     }
+
+                    if gesture.action.supportsAppTarget {
+                        TargetAppRow(targetApp: $gesture.targetApp)
+                    }
                 }
 
                 Picker("Speed", selection: $gesture.speed) {

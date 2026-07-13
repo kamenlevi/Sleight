@@ -52,13 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let dir = URL(fileURLWithPath: CommandLine.arguments[flagIndex + 1], isDirectory: true)
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             MainActor.assumeIsolated {
-                let variants: [(String, DiscreteAction)] = [
-                    ("picker-collapsed", .playPause), ("picker-expanded", .lockScreen),
-                ]
-                for (name, selection) in variants {
-                    let view = ActionCatalog(selection: .constant(selection),
-                                             includeOff: true, open: .constant(true))
-                        .background(.background)
+                @MainActor func write(_ view: some View, _ name: String) {
                     let renderer = ImageRenderer(content: view)
                     renderer.scale = 2
                     if let image = renderer.nsImage, let tiff = image.tiffRepresentation,
@@ -67,6 +61,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         try? png.write(to: dir.appendingPathComponent("\(name).png"))
                     }
                 }
+                let variants: [(String, DiscreteAction)] = [
+                    ("picker-collapsed", .playPause), ("picker-expanded", .lockScreen),
+                ]
+                for (name, selection) in variants {
+                    write(ActionCatalog(selection: .constant(selection),
+                                        includeOff: true, open: .constant(true))
+                        .background(.background), name)
+                }
+                write(VStack(spacing: 8) {
+                    TargetAppRow(targetApp: .constant(nil))
+                    TargetAppRow(targetApp: .constant("/Applications/Spotify.app"))
+                }.padding(12).frame(width: 420).background(.background), "target-row")
             }
             exit(0)
         }

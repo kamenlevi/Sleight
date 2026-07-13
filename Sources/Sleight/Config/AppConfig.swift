@@ -145,6 +145,22 @@ enum DiscreteAction: String, Codable, CaseIterable, Identifiable {
         }
     }
 
+    /// Actions that can be aimed at one specific app instead of acting
+    /// system-wide: the media trio (scripted straight to that player, no
+    /// matter what else is playing) and the keystroke-backed actions (the
+    /// key combo is delivered to that app's process, even in the background).
+    var supportsAppTarget: Bool {
+        switch self {
+        case .playPause, .nextTrack, .previousTrack,
+             .browserBack, .browserForward, .nextTab, .previousTab, .newTab,
+             .reopenClosedTab, .closeTabOrWindow, .minimizeWindow, .hideApp,
+             .fullScreenToggle, .zoomIn, .zoomOut:
+            true
+        default:
+            false
+        }
+    }
+
     var symbol: String {
         switch self {
         case .none: "circle.slash"
@@ -205,6 +221,8 @@ struct ShortcutBinding: Codable, Equatable, Identifiable {
     var action: DiscreteAction = .keyboardBrightnessCycle
     var appPath = ""
     var shellCommand = ""
+    /// Optional .app path this action is aimed at.
+    var targetApp: String?
 
     var isRecorded: Bool { keyCode >= 0 }
 }
@@ -318,6 +336,8 @@ struct CustomGesture: Codable, Equatable, Identifiable {
     var action: DiscreteAction = .playPause
     var appPath = ""
     var shellCommand = ""
+    /// Optional .app path this action is aimed at.
+    var targetApp: String?
     var sensitivity: Double = 1.0
     var speed: SpeedRequirement = .any
     /// Optional drawn outline: when present (3+ points), the gesture is only
@@ -353,6 +373,14 @@ enum AutomationAction: String, Codable, CaseIterable, Identifiable {
     var usesLevel: Bool {
         switch self {
         case .setVolume, .setDisplayBrightness, .setKeyboardBrightness: true
+        default: false
+        }
+    }
+
+    /// Media actions can be aimed at one specific player.
+    var supportsAppTarget: Bool {
+        switch self {
+        case .playPause, .nextTrack, .previousTrack: true
         default: false
         }
     }
@@ -400,6 +428,8 @@ struct Automation: Codable, Equatable, Identifiable {
     var level: Double = 0.5
     var appPath = ""
     var shellCommand = ""
+    /// Optional .app path the media actions are aimed at.
+    var targetApp: String?
     var hour = 9
     var minute = 0
     /// Calendar weekday numbers (1 = Sunday … 7 = Saturday).
@@ -415,6 +445,10 @@ struct TapConfig: Codable, Equatable {
     var action: DiscreteAction = .none
     var appPath: String = ""
     var shellCommand: String = ""
+    /// Optional .app path this action is aimed at (see DiscreteAction
+    /// .supportsAppTarget). Optional so configs from before this field
+    /// existed still decode.
+    var targetApp: String?
 }
 
 struct SleightConfig: Codable, Equatable {

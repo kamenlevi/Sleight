@@ -401,7 +401,8 @@ final class GestureEngine {
                 coordinator?.performDiscrete(
                     action: gesture.action,
                     appPath: gesture.appPath,
-                    shellCommand: gesture.shellCommand
+                    shellCommand: gesture.shellCommand,
+                    targetApp: gesture.targetApp
                 )
                 clearCandidateFreeze()
                 phase = .dead

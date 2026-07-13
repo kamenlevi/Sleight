@@ -143,6 +143,10 @@ private struct AutomationRow: View {
                         .font(.system(.callout, design: .monospaced))
                 }
 
+                if automation.action.supportsAppTarget {
+                    TargetAppRow(targetApp: $automation.targetApp)
+                }
+
                 WeekdayPicker(selection: $automation.weekdays)
             }
             .disabled(!automation.enabled)
