@@ -72,12 +72,8 @@ private struct ShortcutRow: View {
 
                 ShortcutRecorder(keyCode: $binding.keyCode, modifiers: $binding.modifiers)
 
-                Picker("", selection: $binding.action) {
-                    ForEach(DiscreteAction.allCases.filter { $0 != .none }) { action in
-                        Label(action.label, systemImage: action.symbol).tag(action)
-                    }
-                }
-                .labelsHidden()
+                DiscreteActionPicker(title: "", action: $binding.action, includeOff: false)
+                    .labelsHidden()
 
                 Button(role: .destructive, action: onDelete) {
                     Image(systemName: "trash")

@@ -196,11 +196,7 @@ private struct GestureEditor: View {
                             .frame(width: 30)
                     }
                 } else {
-                    Picker("Action", selection: $gesture.action) {
-                        ForEach(DiscreteAction.allCases.filter { $0 != .none }) { action in
-                            Label(action.label, systemImage: action.symbol).tag(action)
-                        }
-                    }
+                    DiscreteActionPicker(title: "Action", action: $gesture.action, includeOff: false)
                     if gesture.action == .launchApp {
                         HStack {
                             Text(gesture.appPath.isEmpty

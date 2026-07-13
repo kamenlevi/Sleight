@@ -31,7 +31,15 @@ Details that make it feel native:
 - **Lift-and-resume** — lift one finger mid-gesture (keep any finger down) and the gesture waits; put the finger back and keep turning.
 - **Scroll suppression** — while a dial is active, an event tap swallows the scroll events macOS would otherwise send, so turning the volume never scrolls the page under your cursor.
 - **Smooth values** — volume is set directly through CoreAudio with sub-percent resolution instead of the 16 coarse steps of the volume keys.
-- **A HUD** that appears while you adjust and fades away.
+- **A HUD** that appears while you adjust and fades away — and flashes a
+  short confirmation when a tap or shortcut fires something you can't
+  otherwise see (launching an app, switching keyboard language…).
+- **A deep action catalogue** — every tap, shortcut and custom gesture can
+  play/pause media, cycle the keyboard language, mute the microphone, lock
+  the screen, sleep the displays or the Mac, start the screen saver, open
+  Mission Control or show the desktop, toggle light/dark mode, take an area
+  screenshot to the clipboard, launch any app, or run a shell command
+  (see the **More** group in the action pickers).
 - **A live visualizer** in Settings that shows every raw touch in real time —
   with a button to [Menagerie](https://github.com/kamenlevi/Menagerie), the
   same idea grown into a toy full of cardboard creatures.

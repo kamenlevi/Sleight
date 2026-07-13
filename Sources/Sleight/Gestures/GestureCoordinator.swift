@@ -292,16 +292,26 @@ final class GestureCoordinator: @unchecked Sendable {
         performDiscrete(action: tapConfig.action, appPath: tapConfig.appPath, shellCommand: tapConfig.shellCommand)
     }
 
+    /// A brief HUD confirmation for actions whose effect isn't otherwise
+    /// visible — the user should never wonder whether the gesture landed.
+    private func flash(_ symbol: String, _ text: String) {
+        guard config.showHUD else { return }
+        Task { @MainActor in HUDController.shared.flash(symbol: symbol, text: text) }
+    }
+
     func performDiscrete(action: DiscreteAction, appPath: String, shellCommand: String) {
         switch action {
         case .none:
             break
         case .playPause:
             Task { @MainActor in MediaKeys.press(MediaKeys.playPause) }
+            flash(action.symbol, "Play / Pause")
         case .nextTrack:
             Task { @MainActor in MediaKeys.press(MediaKeys.next) }
+            flash(action.symbol, "Next Track")
         case .previousTrack:
             Task { @MainActor in MediaKeys.press(MediaKeys.previous) }
+            flash(action.symbol, "Previous Track")
         case .muteToggle:
             let muted = SystemVolume.isMuted() ?? false
             SystemVolume.setMuted(!muted)
@@ -350,6 +360,8 @@ final class GestureCoordinator: @unchecked Sendable {
         case .launchApp:
             let path = appPath
             guard !path.isEmpty else { return }
+            let name = ((path as NSString).lastPathComponent as NSString).deletingPathExtension
+            flash(action.symbol, "Opening \(name)")
             Task { @MainActor in
                 NSWorkspace.shared.openApplication(
                     at: URL(fileURLWithPath: path),
@@ -359,10 +371,45 @@ final class GestureCoordinator: @unchecked Sendable {
         case .shellCommand:
             let command = shellCommand
             guard !command.isEmpty else { return }
+            flash(action.symbol, "Ran: \(command)")
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/bin/zsh")
             process.arguments = ["-lc", command]
             try? process.run()
+        case .cycleInputSource:
+            Task { @MainActor in
+                if let name = SystemActions.cycleInputSource() {
+                    if self.config.showHUD {
+                        HUDController.shared.flash(symbol: "globe", text: "Keyboard: \(name)")
+                    }
+                } else if self.config.showHUD {
+                    HUDController.shared.flash(symbol: "globe",
+                                               text: "Only one keyboard language is enabled")
+                }
+            }
+        case .micMuteToggle:
+            if let muted = SystemActions.toggleMicMute() {
+                flash(muted ? "mic.slash.fill" : "mic.fill",
+                      muted ? "Microphone muted" : "Microphone live")
+            } else {
+                flash("mic.badge.xmark", "This microphone has no mute control")
+            }
+        case .lockScreen:
+            SystemActions.lockScreen()
+        case .sleepDisplays:
+            SystemActions.sleepDisplays()
+        case .sleepMac:
+            SystemActions.sleepMac()
+        case .startScreenSaver:
+            SystemActions.startScreenSaver()
+        case .missionControl:
+            SystemActions.missionControl()
+        case .showDesktop:
+            SystemActions.showDesktop()
+        case .toggleDarkMode:
+            SystemActions.toggleDarkMode()
+        case .screenshotArea:
+            SystemActions.screenshotArea()
         }
     }
 }

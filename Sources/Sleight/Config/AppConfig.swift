@@ -39,8 +39,32 @@ enum DiscreteAction: String, Codable, CaseIterable, Identifiable {
     case keyboardBrightnessCycle
     case launchApp
     case shellCommand
+    // The "More" catalogue.
+    case cycleInputSource
+    case micMuteToggle
+    case lockScreen
+    case sleepDisplays
+    case sleepMac
+    case startScreenSaver
+    case missionControl
+    case showDesktop
+    case toggleDarkMode
+    case screenshotArea
 
     var id: String { rawValue }
+
+    /// The everyday actions shown at the top of every action picker.
+    static let primary: [DiscreteAction] = [
+        .none, .playPause, .nextTrack, .previousTrack, .muteToggle,
+        .keyboardBrightnessCycle, .launchApp, .shellCommand,
+    ]
+
+    /// Everything else, listed under "More" at the bottom of the pickers.
+    static let more: [DiscreteAction] = [
+        .cycleInputSource, .micMuteToggle, .lockScreen, .sleepDisplays,
+        .sleepMac, .startScreenSaver, .missionControl, .showDesktop,
+        .toggleDarkMode, .screenshotArea,
+    ]
 
     var label: String {
         switch self {
@@ -52,6 +76,16 @@ enum DiscreteAction: String, Codable, CaseIterable, Identifiable {
         case .keyboardBrightnessCycle: "Cycle Keyboard Backlight (off · mid · max)"
         case .launchApp: "Launch App…"
         case .shellCommand: "Run Shell Command…"
+        case .cycleInputSource: "Next Keyboard Language"
+        case .micMuteToggle: "Mute / Unmute Microphone"
+        case .lockScreen: "Lock Screen"
+        case .sleepDisplays: "Sleep Displays"
+        case .sleepMac: "Sleep Mac"
+        case .startScreenSaver: "Start Screen Saver"
+        case .missionControl: "Mission Control"
+        case .showDesktop: "Show Desktop"
+        case .toggleDarkMode: "Toggle Light / Dark Mode"
+        case .screenshotArea: "Screenshot Area to Clipboard"
         }
     }
 
@@ -65,6 +99,16 @@ enum DiscreteAction: String, Codable, CaseIterable, Identifiable {
         case .keyboardBrightnessCycle: "light.max"
         case .launchApp: "app.badge.checkmark"
         case .shellCommand: "terminal.fill"
+        case .cycleInputSource: "globe"
+        case .micMuteToggle: "mic.slash.fill"
+        case .lockScreen: "lock.fill"
+        case .sleepDisplays: "display"
+        case .sleepMac: "moon.zzz.fill"
+        case .startScreenSaver: "sparkles.tv"
+        case .missionControl: "rectangle.3.group"
+        case .showDesktop: "desktopcomputer"
+        case .toggleDarkMode: "circle.lefthalf.filled"
+        case .screenshotArea: "camera.viewfinder"
         }
     }
 }

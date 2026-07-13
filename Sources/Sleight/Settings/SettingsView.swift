@@ -665,11 +665,7 @@ private struct TapRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker(title, selection: $config.action) {
-                ForEach(DiscreteAction.allCases) { action in
-                    Label(action.label, systemImage: action.symbol).tag(action)
-                }
-            }
+            DiscreteActionPicker(title: title, action: $config.action)
 
             if config.action == .launchApp {
                 HStack {

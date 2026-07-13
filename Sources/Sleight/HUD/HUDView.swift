@@ -21,12 +21,19 @@ struct HUDView: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            Image(systemName: symbolName)
+            Image(systemName: model.message != nil ? model.messageSymbol : symbolName)
                 .font(.system(size: 20, weight: .medium))
                 .foregroundStyle(.primary)
                 .frame(width: 28)
 
-            if model.available {
+            if let message = model.message {
+                Text(message)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .foregroundStyle(.primary.opacity(0.85))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else if model.available {
                 LevelBar(value: CGFloat(model.value))
                     .frame(height: 8)
 

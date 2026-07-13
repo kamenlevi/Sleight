@@ -112,8 +112,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Only surface the settings window unprompted on first launch or when
-        // something genuinely isn't working yet.
-        if firstLaunch || !Permissions.inputMonitoringWorking || !Permissions.accessibilityGranted {
+        // something genuinely isn't working yet. (`--settings` forces it —
+        // handy from the command line.)
+        if firstLaunch || CommandLine.arguments.contains("--settings")
+            || !Permissions.inputMonitoringWorking || !Permissions.accessibilityGranted {
             SettingsWindow.show(tab: .general)
         }
     }

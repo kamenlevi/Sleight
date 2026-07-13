@@ -8,6 +8,11 @@ final class HUDModel {
     var value: Float = 0
     var available = true
     var muted = false
+    /// Non-nil switches the bezel to message mode: icon + text instead of a
+    /// level bar. Used to confirm discrete actions that would otherwise be
+    /// invisible ("Opening Safari", "Keyboard: Bulgarian").
+    var message: String?
+    var messageSymbol = ""
 }
 
 /// Floating feedback bezel shown while a dial gesture is adjusting something.
@@ -103,19 +108,7 @@ final class HUDController {
         self.panel = panel
         let wasVisible = panel.isVisible && panel.alphaValue > 0.5
 
-        // Show on the screen the user is actually looking at — the one with
-        // the pointer — never a previous display or Space.
-        let mouse = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) }
-            ?? NSScreen.main
-        if let screen {
-            let frame = screen.visibleFrame
-            let size = panel.frame.size
-            panel.setFrameOrigin(NSPoint(
-                x: frame.midX - size.width / 2,
-                y: frame.minY + frame.height * 0.12
-            ))
-        }
+        position(panel)
 
         if wasVisible || ConfigStore.shared.config.animateHUDReappear {
             // Already on screen (or the user opted in): let the bar glide to
@@ -146,11 +139,55 @@ final class HUDController {
         }
     }
 
+    /// Place the bezel on the screen the user is actually looking at — the
+    /// one with the pointer — never a previous display or Space.
+    private func position(_ panel: NSPanel) {
+        let mouse = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) }
+            ?? NSScreen.main
+        if let screen {
+            let frame = screen.visibleFrame
+            let size = panel.frame.size
+            panel.setFrameOrigin(NSPoint(
+                x: frame.midX - size.width / 2,
+                y: frame.minY + frame.height * 0.12
+            ))
+        }
+    }
+
     private func apply(control: ContinuousControl, value: Float, available: Bool, muted: Bool) {
         model.control = control
         model.value = value
         model.available = available
         model.muted = muted
+        model.message = nil
+    }
+
+    /// A brief icon-and-text confirmation in the same bezel — feedback for
+    /// discrete actions whose effect isn't visible on its own.
+    func flash(symbol: String, text: String) {
+        hideTask?.cancel()
+        hideTask = nil
+        generation += 1
+
+        let panel = self.panel ?? makePanel()
+        self.panel = panel
+        position(panel)
+        model.message = text
+        model.messageSymbol = symbol
+        isFadingOut = false
+        panel.orderFrontRegardless()
+        if panel.alphaValue < 1 {
+            let duration = 0.12 / speed
+            DispatchQueue.main.async {
+                guard panel.alphaValue < 1 else { return }
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = duration
+                    panel.animator().alphaValue = 1
+                }
+            }
+        }
+        scheduleHide(after: 1.15)
     }
 
     func update(control: ContinuousControl, value: Float) {
@@ -166,6 +203,7 @@ final class HUDController {
             model.control = control
             model.value = value
             model.muted = false
+            model.message = nil
         }
     }
 
