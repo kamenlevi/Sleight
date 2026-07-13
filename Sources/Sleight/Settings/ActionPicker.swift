@@ -24,7 +24,6 @@ struct TargetAppRow: View {
                 .foregroundStyle(.secondary)
             Spacer()
             Button(appName == nil ? "Only in App…" : "Change…") { choose() }
-                .controlSize(.small)
             if appName != nil {
                 Button {
                     targetApp = nil
