@@ -11,6 +11,10 @@ struct SettingsView: View {
     /// appeared to stay behind as a ghost. Here the tab itself moves with the
     /// pointer and its neighbours slide into the gap it leaves.
     @State private var draggingTab: SettingsTab?
+    /// True only while the mouse is still down. The settling animation after
+    /// release needs `draggingTab` to stay set, but must not be suppressed the
+    /// way the live drag's position changes are.
+    @State private var liveDrag = false
     /// How far the dragged tab is drawn from the slot it currently occupies.
     @State private var dragOffset: CGFloat = 0
     /// Layout distance the tab has already gained from swapping past
@@ -65,9 +69,7 @@ struct SettingsView: View {
             title: tab.title,
             isSelected: state.selectedTab == tab,
             isDragging: draggingTab == tab
-        ) {
-            state.selectedTab = tab
-        }
+        )
         .background(
             GeometryReader { geo in
                 Color.clear.preference(key: TabWidthKey.self, value: [tab: geo.size.width])
@@ -76,28 +78,51 @@ struct SettingsView: View {
         .offset(x: draggingTab == tab ? dragOffset : 0)
         // The travelling tab rides above the ones sliding past it.
         .zIndex(draggingTab == tab ? 1 : 0)
+        // Swapping animates every tab into its new slot — but the dragged one
+        // must jump to its new slot instantly, because its offset is corrected
+        // by the same distance in the same instant. Let it animate and the two
+        // fall out of step: the tab lurches a whole tab-width backwards, then
+        // glides forward to catch up, on every single swap.
+        .transaction { transaction in
+            if liveDrag, draggingTab == tab { transaction.animation = nil }
+        }
         .gesture(dragGesture(for: tab))
     }
 
-    /// Press a tab and move sideways to carry it to a new place in the bar.
-    /// The 4pt threshold keeps an ordinary click a click.
+    /// One gesture handles both jobs, so there's no ambiguity about whether a
+    /// press is a click or a drag: under 4pt of travel it selects the tab on
+    /// release, beyond that it carries the tab to a new place in the bar.
     private func dragGesture(for tab: SettingsTab) -> some Gesture {
-        DragGesture(minimumDistance: 4)
+        DragGesture(minimumDistance: 0)
             .onChanged { value in
-                if draggingTab != tab {
+                if !liveDrag {
+                    guard abs(value.translation.width) > 4 else { return }
+                    liveDrag = true
                     draggingTab = tab
                     dragShift = 0
                 }
+                guard draggingTab == tab else { return }
                 dragOffset = value.translation.width - dragShift
                 swapPastNeighbours(tab)
             }
-            .onEnded { _ in
-                // Settle into the slot the drag left it in.
-                withAnimation(.snappy(duration: 0.2)) {
-                    dragOffset = 0
-                    draggingTab = nil
+            .onEnded { value in
+                guard liveDrag, draggingTab == tab else {
+                    // Never travelled far enough to be a drag: a plain click.
+                    if hypot(value.translation.width, value.translation.height) < 4 {
+                        state.selectedTab = tab
+                    }
+                    return
                 }
+                liveDrag = false
                 dragShift = 0
+                // Settle into the slot the drag left it in. `draggingTab` has
+                // to outlive the animation for the offset to keep applying, so
+                // it's cleared once the tab has arrived.
+                withAnimation(.snappy(duration: 0.2)) { dragOffset = 0 }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    // Unless another drag has started in the meantime.
+                    if !liveDrag, draggingTab == tab { draggingTab = nil }
+                }
             }
     }
 
@@ -136,12 +161,12 @@ private struct TabBarButton: View {
     let title: String
     let isSelected: Bool
     var isDragging = false
-    let action: () -> Void
 
     @State private var hovering = false
 
-    // Deliberately not a Button: a Button swallows the press, and the drag
-    // gesture that carries the tab around would never see it.
+    // Deliberately not a Button, and with no gesture of its own: a Button
+    // swallows the press, and a tap gesture here would compete with the drag
+    // gesture on the parent. Selection and dragging are both decided there.
     var body: some View {
         Text(title)
             // Constant weight in all states: switching selection must not
@@ -161,7 +186,6 @@ private struct TabBarButton: View {
             .shadow(color: .black.opacity(isDragging ? 0.22 : 0),
                     radius: isDragging ? 5 : 0, y: isDragging ? 2 : 0)
             .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-            .onTapGesture(perform: action)
             .onHover { hovering = $0 }
             .accessibilityAddTraits(.isButton)
             .help("Drag sideways to reorder")
