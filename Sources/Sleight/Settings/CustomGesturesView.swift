@@ -61,20 +61,26 @@ struct CustomGesturesView: View {
             .listStyle(.sidebar)
 
             Divider()
-            HStack {
-                Button {
-                    var gesture = CustomGesture()
-                    gesture.name = "Gesture \(store.config.customGestures.count + 1)"
-                    store.config.customGestures.append(gesture)
-                    selectedGestureID = gesture.id
-                    selectedFingerID = gesture.fingers.first?.id
-                } label: {
-                    Image(systemName: "plus")
-                }
-                .buttonStyle(.borderless)
-                .padding(6)
-                Spacer()
+            // A full-width, accented button: creating a gesture is the whole
+            // point of this tab, so the control that does it shouldn't be a
+            // stray borderless glyph in the corner.
+            Button {
+                var gesture = CustomGesture()
+                gesture.name = "Gesture \(store.config.customGestures.count + 1)"
+                store.config.customGestures.append(gesture)
+                selectedGestureID = gesture.id
+                selectedFingerID = gesture.fingers.first?.id
+            } label: {
+                Label("New Gesture", systemImage: "plus.circle.fill")
+                    .fontWeight(.medium)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 3)
             }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .keyboardShortcut("n")
+            .help("Create a new custom gesture")
+            .padding(8)
         }
     }
 
@@ -85,7 +91,7 @@ struct CustomGesturesView: View {
                 .foregroundStyle(.tertiary)
             Text("Design your own gesture")
                 .font(.headline)
-            Text("Click + to create one. Place finger zones on the pad, give each a direction, and choose what it controls.")
+            Text("Click New Gesture to create one. Place finger zones on the pad, give each a direction, and choose what it controls.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

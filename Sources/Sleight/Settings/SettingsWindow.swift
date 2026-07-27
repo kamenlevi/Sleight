@@ -20,8 +20,7 @@ enum SettingsWindow {
         becomeRegularApp()
         if let window {
             window.collectionBehavior.insert(.moveToActiveSpace)
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate()
+            bringToFront(window)
             return
         }
         let hosting = NSHostingController(rootView: SettingsView())
@@ -37,18 +36,31 @@ enum SettingsWindow {
         window.setContentSize(NSSize(width: 640, height: 600))
         window.center()
         Self.window = window
+        bringToFront(window)
+    }
+
+    /// Raising the window has to fight two things when the click came from the
+    /// menu bar: Sleight usually isn't the active app, so a plain
+    /// `makeKeyAndOrderFront` leaves an already-open window sitting behind
+    /// whatever is frontmost; and the status-item menu is still tearing down,
+    /// which can swallow the activation entirely. So: un-minimize, order front
+    /// regardless of who is active, and activate again on the next runloop
+    /// pass once the menu is gone.
+    private static func bringToFront(_ window: NSWindow) {
+        if window.isMiniaturized { window.deminiaturize(nil) }
+        window.orderFrontRegardless()
         window.makeKeyAndOrderFront(nil)
-        NSApp.activate()
+        NSApp.activate(ignoringOtherApps: true)
+        DispatchQueue.main.async {
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+        }
     }
 
     private static func becomeRegularApp() {
         installMainMenu()
         guard NSApp.activationPolicy() != .regular else { return }
         NSApp.setActivationPolicy(.regular)
-        // Right after a policy switch, activation can land before the menu
-        // bar catches up — a second activate on the next runloop pass makes
-        // the app menu reliably appear.
-        DispatchQueue.main.async { NSApp.activate() }
     }
 
     private final class Delegate: NSObject, NSWindowDelegate {
