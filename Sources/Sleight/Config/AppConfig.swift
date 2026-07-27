@@ -486,13 +486,15 @@ struct SleightConfig: Codable, Equatable {
     /// a fresh popup appears already at its value.
     var animateHUDReappear = false
     var enabled = true
+    /// Left-to-right order of the settings tabs, as dragged by the user.
+    var tabOrder: [SettingsTab] = SettingsTab.defaultOrder
 
     enum CodingKeys: String, CodingKey {
         case twoFingerDial, threeFingerDial, slider
         case threeFingerTap, fourFingerTap, fiveFingerTap
         case customGestures, shortcuts, automations
         case hapticDetents, showHUD, actionConfirmations, freezeScreen, freezePointer
-        case keyboardLevels, animationSpeed, animateHUDReappear, enabled
+        case keyboardLevels, animationSpeed, animateHUDReappear, enabled, tabOrder
     }
 }
 
@@ -527,6 +529,9 @@ extension SleightConfig {
         animationSpeed = (try? c.decodeIfPresent(Double.self, forKey: .animationSpeed)) ?? nil ?? defaults.animationSpeed
         animateHUDReappear = (try? c.decodeIfPresent(Bool.self, forKey: .animateHUDReappear)) ?? nil ?? defaults.animateHUDReappear
         enabled = (try? c.decodeIfPresent(Bool.self, forKey: .enabled)) ?? nil ?? defaults.enabled
+        tabOrder = SettingsTab.sanitizedOrder(
+            (try? c.decodeIfPresent([SettingsTab].self, forKey: .tabOrder)) ?? nil ?? defaults.tabOrder
+        )
     }
 }
 

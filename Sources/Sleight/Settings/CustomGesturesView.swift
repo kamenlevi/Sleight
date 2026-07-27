@@ -18,12 +18,7 @@ struct CustomGesturesView: View {
             if let index = selectedIndex {
                 GestureEditor(
                     gesture: $store.config.customGestures[index],
-                    selectedFingerID: $selectedFingerID,
-                    onDelete: {
-                        let id = store.config.customGestures[index].id
-                        store.config.customGestures.removeAll { $0.id == id }
-                        selectedGestureID = store.config.customGestures.first?.id
-                    }
+                    selectedFingerID: $selectedFingerID
                 )
             } else {
                 emptyState
@@ -34,23 +29,25 @@ struct CustomGesturesView: View {
         }
     }
 
+    private func delete(_ id: UUID) {
+        // Keep a neighbour selected rather than snapping back to the top.
+        let index = store.config.customGestures.firstIndex { $0.id == id }
+        store.config.customGestures.removeAll { $0.id == id }
+        if selectedGestureID == id {
+            let next = index.map { min($0, store.config.customGestures.count - 1) } ?? 0
+            selectedGestureID = store.config.customGestures.indices.contains(next)
+                ? store.config.customGestures[next].id
+                : nil
+        }
+    }
+
     private var gestureList: some View {
         VStack(spacing: 0) {
             List(selection: $selectedGestureID) {
                 ForEach(store.config.customGestures) { gesture in
-                    HStack {
-                        Image(systemName: gesture.isContinuous
-                              ? gesture.control.symbol
-                              : gesture.action.symbol)
-                            .foregroundStyle(gesture.enabled ? Color.accentColor : .secondary)
-                            .frame(width: 20)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(gesture.name)
-                                .fontWeight(.medium)
-                            Text("\(gesture.fingers.count) finger\(gesture.fingers.count == 1 ? "" : "s")")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                    GestureRow(gesture: gesture,
+                               isSelected: selectedGestureID == gesture.id) {
+                        delete(gesture.id)
                     }
                     .tag(gesture.id)
                 }
@@ -101,12 +98,63 @@ struct CustomGesturesView: View {
     }
 }
 
+// MARK: - List row
+
+/// One gesture in the sidebar, with its own delete button on the far right.
+/// Deleting used to live at the very bottom of the editor, out of sight until
+/// you scrolled the whole pane; here it's always one click from the gesture
+/// it removes. The button only appears on the selected or hovered row, so
+/// there's no stray trash target under the pointer as you move down the list.
+private struct GestureRow: View {
+    let gesture: CustomGesture
+    let isSelected: Bool
+    let onDelete: () -> Void
+
+    @State private var hoveringRow = false
+    @State private var hoveringTrash = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: gesture.isContinuous
+                  ? gesture.control.symbol
+                  : gesture.action.symbol)
+                .foregroundStyle(gesture.enabled ? Color.accentColor : .secondary)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(gesture.name)
+                    .fontWeight(.medium)
+                    .lineLimit(1)
+                Text("\(gesture.fingers.count) finger\(gesture.fingers.count == 1 ? "" : "s")")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 2)
+            // A fixed-width slot whether or not the button is in it, so the
+            // name never reflows as the pointer moves across rows.
+            Group {
+                if isSelected || hoveringRow {
+                    Button(action: onDelete) {
+                        Image(systemName: "trash")
+                            .foregroundStyle(hoveringTrash ? Color.red : .secondary)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.borderless)
+                    .onHover { hoveringTrash = $0 }
+                    .help("Delete “\(gesture.name)”")
+                }
+            }
+            .frame(width: 20)
+        }
+        .contentShape(Rectangle())
+        .onHover { hoveringRow = $0 }
+    }
+}
+
 // MARK: - Editor
 
 private struct GestureEditor: View {
     @Binding var gesture: CustomGesture
     @Binding var selectedFingerID: UUID?
-    let onDelete: () -> Void
     @State private var drawingBoundary = false
 
     private var hasBoundary: Bool { (gesture.boundary?.count ?? 0) >= 3 }
@@ -246,11 +294,6 @@ private struct GestureEditor: View {
                           systemImage: "exclamationmark.triangle.fill")
                         .font(.footnote)
                         .foregroundStyle(.orange)
-                }
-
-                Divider()
-                Button(role: .destructive, action: onDelete) {
-                    Label("Delete Gesture", systemImage: "trash")
                 }
             }
             .padding(16)

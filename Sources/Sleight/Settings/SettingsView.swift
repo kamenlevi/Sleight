@@ -3,22 +3,8 @@ import SwiftUI
 
 struct SettingsView: View {
     @State private var state = SettingsState.shared
-
-    private struct TabItem: Identifiable {
-        let tab: SettingsTab
-        let title: String
-        var id: SettingsTab { tab }
-    }
-
-    private let tabs: [TabItem] = [
-        .init(tab: .general, title: "General"),
-        .init(tab: .gestures, title: "Gestures"),
-        .init(tab: .custom, title: "Custom"),
-        .init(tab: .shortcuts, title: "Shortcuts"),
-        .init(tab: .automation, title: "Automation"),
-        .init(tab: .visualizer, title: "Visualizer"),
-        .init(tab: .about, title: "About"),
-    ]
+    @State private var store = ConfigStore.shared
+    @State private var draggingTab: SettingsTab?
 
     // A small, text-only custom tab bar instead of SwiftUI's TabView: on
     // macOS 26 the native tab strip paints a Liquid Glass blob behind the
@@ -26,20 +12,7 @@ struct SettingsView: View {
     // Transparency setting. This renders identically everywhere.
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 4) {
-                ForEach(tabs) { item in
-                    TabBarButton(
-                        title: item.title,
-                        isSelected: state.selectedTab == item.tab
-                    ) {
-                        state.selectedTab = item.tab
-                    }
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .frame(maxWidth: .infinity)
-            .background(.background)
+            tabBar
 
             Divider()
 
@@ -58,11 +31,48 @@ struct SettingsView: View {
         }
         .frame(width: 640, height: 600)
     }
+
+    private var tabBar: some View {
+        HStack(spacing: 4) {
+            ForEach(store.config.tabOrder) { tab in
+                tabButton(tab)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity)
+        .background(.background)
+        // Let go in the empty part of the bar rather than on top of a tab and
+        // no per-tab delegate fires — catch it here so the dragged tab doesn't
+        // stay dimmed. The order is already whatever the drag left behind.
+        .onDrop(of: [.text], isTargeted: nil) { _ in
+            draggingTab = nil
+            return true
+        }
+    }
+
+    private func tabButton(_ tab: SettingsTab) -> some View {
+        TabBarButton(
+            title: tab.title,
+            isSelected: state.selectedTab == tab,
+            isDragging: draggingTab == tab
+        ) {
+            state.selectedTab = tab
+        }
+        // Press a tab and drag sideways to put it anywhere in the bar; the
+        // others slide aside as it passes over them, and the order sticks.
+        .onDrag {
+            draggingTab = tab
+            return NSItemProvider(object: tab.rawValue as NSString)
+        }
+        .reorderable(tab, in: $store.config.tabOrder, dragging: $draggingTab)
+    }
 }
 
 private struct TabBarButton: View {
     let title: String
     let isSelected: Bool
+    var isDragging = false
     let action: () -> Void
 
     @State private var hovering = false
@@ -85,7 +95,11 @@ private struct TabBarButton: View {
                 .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
         .buttonStyle(.plain)
+        // The tab being dragged is left as a faint placeholder in the bar,
+        // so it's obvious which one is travelling.
+        .opacity(isDragging ? 0.35 : 1)
         .onHover { hovering = $0 }
+        .help("Drag sideways to reorder")
     }
 }
 
