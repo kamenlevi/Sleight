@@ -46,15 +46,14 @@ struct ReorderDropDelegate<Item: Identifiable>: DropDelegate {
 }
 
 extension View {
-    /// Marks this view as a reorderable row: an `.onDrag` elsewhere on the row
-    /// (usually the DragHandle) starts the drag, and dropping anywhere on this
-    /// row moves the dragged item to this row's slot in `items`. Works for
-    /// rows in a column and tabs in a row alike.
+    /// Marks this view as a reorderable row: `handleID` starts the drag (put
+    /// it on the DragHandle), and dropping anywhere on the row moves the
+    /// dragged item to this row's slot in `items`.
     func reorderable<Item: Identifiable>(
         _ item: Item,
         in items: Binding<[Item]>,
         dragging: Binding<Item.ID?>
-    ) -> some View {
+    ) -> some View where Item.ID == UUID {
         onDrop(
             of: [.text],
             delegate: ReorderDropDelegate(item: item, items: items, dragging: dragging)
