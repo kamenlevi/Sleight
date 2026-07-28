@@ -126,7 +126,7 @@ enum SettingsWindow {
     }
 }
 
-enum SettingsTab: String, Codable, CaseIterable, Identifiable {
+enum SettingsTab: String {
     case general
     case gestures
     case custom
@@ -134,37 +134,6 @@ enum SettingsTab: String, Codable, CaseIterable, Identifiable {
     case automation
     case visualizer
     case about
-
-    var id: Self { self }
-
-    var title: String {
-        switch self {
-        case .general: "General"
-        case .gestures: "Gestures"
-        case .custom: "Custom"
-        case .shortcuts: "Shortcuts"
-        case .automation: "Automation"
-        case .visualizer: "Visualizer"
-        case .about: "About"
-        }
-    }
-
-    /// Left-to-right order of the tab bar out of the box; users can drag the
-    /// tabs into whatever order they prefer (stored in `tabOrder`).
-    static let defaultOrder: [SettingsTab] = [
-        .general, .shortcuts, .automation, .gestures, .custom, .visualizer, .about,
-    ]
-
-    /// A stored order can be stale: written by an older version that didn't
-    /// have every tab, or by a newer one that had more. Keep what's still
-    /// valid, drop duplicates, and append anything missing in default order,
-    /// so the bar always shows every tab exactly once.
-    static func sanitizedOrder(_ stored: [SettingsTab]) -> [SettingsTab] {
-        var seen = Set<SettingsTab>()
-        var order = stored.filter { seen.insert($0).inserted }
-        order.append(contentsOf: defaultOrder.filter { !seen.contains($0) })
-        return order
-    }
 }
 
 @MainActor
