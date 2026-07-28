@@ -3,35 +3,19 @@ import SwiftUI
 
 struct SettingsView: View {
     @State private var state = SettingsState.shared
-    @State private var store = ConfigStore.shared
-
-    /// Tab reordering is a plain drag gesture rather than SwiftUI's
-    /// `onDrag`/`onDrop`: drag-and-drop always leaves the source view drawn
-    /// where it started and hauls a *separate* snapshot around, so the tab
-    /// appeared to stay behind as a ghost. Here the tab itself moves with the
-    /// pointer and its neighbours slide into the gap it leaves.
-    @State private var draggingTab: SettingsTab?
-    /// True only while the mouse is still down. The settling animation after
-    /// release needs `draggingTab` to stay set, but must not be suppressed the
-    /// way the live drag's position changes are.
-    @State private var liveDrag = false
-    /// How far the dragged tab is drawn from the slot it currently occupies.
-    @State private var dragOffset: CGFloat = 0
-    /// Layout distance the tab has already gained from swapping past
-    /// neighbours, subtracted from the raw translation so the tab stays glued
-    /// to the pointer instead of leaping ahead by a tab width on every swap.
-    @State private var dragShift: CGFloat = 0
-    @State private var tabWidths: [SettingsTab: CGFloat] = [:]
-
-    private let tabSpacing: CGFloat = 4
 
     // A small, text-only custom tab bar instead of SwiftUI's TabView: on
     // macOS 26 the native tab strip paints a Liquid Glass blob behind the
     // selected item that looks different depending on the viewer's
     // Transparency setting. This renders identically everywhere.
+    //
+    // The bar is its own view, and deliberately so: a drag updates state dozens
+    // of times a second, and if that state lived here every mouse-move would
+    // re-evaluate this body — rebuilding the whole settings pane below, Form
+    // rows and all. Keeping it in TabBar confines the churn to the bar.
     var body: some View {
         VStack(spacing: 0) {
-            tabBar
+            TabBar()
 
             Divider()
 
@@ -51,9 +35,41 @@ struct SettingsView: View {
         .frame(width: 640, height: 600)
     }
 
-    private var tabBar: some View {
+}
+
+private struct TabBar: View {
+    @State private var state = SettingsState.shared
+    @State private var store = ConfigStore.shared
+
+    /// Tab reordering is a plain drag gesture rather than SwiftUI's
+    /// `onDrag`/`onDrop`: drag-and-drop always leaves the source view drawn
+    /// where it started and hauls a *separate* snapshot around, so the tab
+    /// appeared to stay behind as a ghost. Here the tab itself moves with the
+    /// pointer and its neighbours slide into the gap it leaves.
+    @State private var draggingTab: SettingsTab?
+    /// True only while the mouse is still down. The settling animation after
+    /// release needs `draggingTab` to stay set, but must not be suppressed the
+    /// way the live drag's position changes are.
+    @State private var liveDrag = false
+    /// How far the dragged tab is drawn from the slot it currently occupies.
+    @State private var dragOffset: CGFloat = 0
+    /// Layout distance the tab has already gained from swapping past
+    /// neighbours, subtracted from the raw translation so the tab stays glued
+    /// to the pointer instead of leaping ahead by a tab width on every swap.
+    @State private var dragShift: CGFloat = 0
+    @State private var tabWidths: [SettingsTab: CGFloat] = [:]
+    /// The order the bar draws while a drag is in flight. Writing every swap
+    /// straight to the config would republish it to every view watching any
+    /// setting, mid-drag; the new order is committed once, on release.
+    @State private var liveOrder: [SettingsTab]?
+
+    private let tabSpacing: CGFloat = 4
+
+    private var order: [SettingsTab] { liveOrder ?? store.config.tabOrder }
+
+    var body: some View {
         HStack(spacing: tabSpacing) {
-            ForEach(store.config.tabOrder) { tab in
+            ForEach(order) { tab in
                 tabButton(tab)
             }
         }
@@ -100,6 +116,7 @@ struct SettingsView: View {
                     liveDrag = true
                     draggingTab = tab
                     dragShift = 0
+                    liveOrder = store.config.tabOrder
                 }
                 guard draggingTab == tab else { return }
                 dragOffset = value.translation.width - dragShift
@@ -115,13 +132,18 @@ struct SettingsView: View {
                 }
                 liveDrag = false
                 dragShift = 0
+                if let liveOrder, liveOrder != store.config.tabOrder {
+                    store.config.tabOrder = liveOrder
+                }
                 // Settle into the slot the drag left it in. `draggingTab` has
                 // to outlive the animation for the offset to keep applying, so
                 // it's cleared once the tab has arrived.
                 withAnimation(.snappy(duration: 0.2)) { dragOffset = 0 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                     // Unless another drag has started in the meantime.
-                    if !liveDrag, draggingTab == tab { draggingTab = nil }
+                    guard !liveDrag, draggingTab == tab else { return }
+                    draggingTab = nil
+                    liveOrder = nil
                 }
             }
     }
@@ -129,20 +151,23 @@ struct SettingsView: View {
     /// Once the tab has travelled past half of the neighbour it's heading
     /// towards, the two trade places and the neighbour animates into the gap.
     /// A loop rather than a single step, so a fast flick can't outrun it.
+    ///
+    /// Half is also the *smallest* threshold that can't oscillate: swapping
+    /// takes a full step off the offset, so a smaller trigger would leave the
+    /// tab far enough the other way to immediately swap back, for ever.
     private func swapPastNeighbours(_ tab: SettingsTab) {
         while true {
-            guard let index = store.config.tabOrder.firstIndex(of: tab) else { return }
+            guard var working = liveOrder, let index = working.firstIndex(of: tab) else { return }
             let forward = dragOffset > 0
             let neighbour = forward ? index + 1 : index - 1
-            guard store.config.tabOrder.indices.contains(neighbour) else { return }
+            guard working.indices.contains(neighbour) else { return }
             // Zero would mean a width we haven't measured yet — bail rather
             // than spin.
-            let step = (tabWidths[store.config.tabOrder[neighbour]] ?? 0) + tabSpacing
+            let step = (tabWidths[working[neighbour]] ?? 0) + tabSpacing
             guard step > tabSpacing, abs(dragOffset) > step / 2 else { return }
 
-            withAnimation(.snappy(duration: 0.2)) {
-                store.config.tabOrder.swapAt(index, neighbour)
-            }
+            working.swapAt(index, neighbour)
+            withAnimation(.snappy(duration: 0.18)) { liveOrder = working }
             dragShift += forward ? step : -step
             dragOffset += forward ? -step : step
         }
@@ -181,10 +206,18 @@ private struct TabBarButton: View {
                           ? Color.accentColor.opacity(0.12)
                           : (hovering || isDragging ? Color.primary.opacity(0.06) : Color.clear))
             )
-            // Picked up: a shadow lifts the travelling tab off the bar. The
-            // tab itself moves, so there's nothing left behind to dim.
-            .shadow(color: .black.opacity(isDragging ? 0.22 : 0),
-                    radius: isDragging ? 5 : 0, y: isDragging ? 2 : 0)
+            // A travelling tab has to be *opaque*, or the tab it's passing
+            // over shows straight through it and the two titles overlap into
+            // mush. This layer sits under the tint, so the tint still reads.
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(.background)
+                    .opacity(isDragging ? 1 : 0)
+            )
+            // Picked up: a shadow and a touch of scale lift it off the bar.
+            .shadow(color: .black.opacity(isDragging ? 0.28 : 0),
+                    radius: isDragging ? 6 : 0, y: isDragging ? 2 : 0)
+            .scaleEffect(isDragging ? 1.04 : 1)
             .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             .onHover { hovering = $0 }
             .accessibilityAddTraits(.isButton)
