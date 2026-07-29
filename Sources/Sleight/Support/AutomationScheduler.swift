@@ -1,20 +1,38 @@
 import AppKit
 import Foundation
 
-/// Runs the user's scheduled automations. A lightweight repeating timer
-/// compares the wall clock against each enabled job once every 20 seconds;
-/// a job fires at most once per calendar minute it matches. Times that pass
-/// while the Mac is asleep are skipped, not replayed on wake.
+/// Runs the user's scheduled automations.
+///
+/// The scheduler asks "did this job come due since I last looked?", not "is it
+/// due this very minute". The difference matters enormously: timers don't run
+/// while the Mac sleeps, and an idle Mac only dark-wakes for a couple of
+/// seconds every quarter of an hour, so a scheduler needing a tick inside one
+/// specific 60-second window would miss a 06:00 job on most nights — which is
+/// exactly what it used to do. Now a time that passes while the Mac is asleep
+/// runs at the first wake afterwards, as long as that's within `catchUpWindow`.
 @MainActor
 final class AutomationScheduler {
     static let shared = AutomationScheduler()
 
     private var timer: Timer?
-    /// Minute stamp each job last fired on, so the sub-minute tick can't
-    /// fire the same job twice within its scheduled minute.
-    private var lastFired: [UUID: String] = [:]
+    /// Occurrence each job last ran for, so a job can't run twice for the
+    /// same scheduled time.
+    private var lastFired: [UUID: Date] = [:]
+    /// When the clock was last examined. Persisted, so a time that passes
+    /// while Sleight isn't running is still caught on the next launch.
+    private var lastCheck: Date
+    private static let lastCheckKey = "com.kamenlevi.sleight.automationLastCheck"
 
-    private init() {}
+    /// How late a missed job may still run. Long enough to cover a night's
+    /// sleep, short enough that opening the lid in the evening doesn't set off
+    /// something scheduled for breakfast.
+    private let catchUpWindow: TimeInterval = 6 * 3600
+
+    private init() {
+        let stored = UserDefaults.standard.double(forKey: Self.lastCheckKey)
+        // First ever run: start from now, so nothing fires retroactively.
+        lastCheck = stored > 0 ? Date(timeIntervalSince1970: stored) : Date()
+    }
 
     func start() {
         guard timer == nil else { return }
@@ -24,24 +42,59 @@ final class AutomationScheduler {
         timer.tolerance = 5
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
+
+        // Waking is the moment the missed jobs are waiting for — don't sit on
+        // them for up to 20 seconds.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { _ in
+            Task { @MainActor in AutomationScheduler.shared.tick() }
+        }
+
+        tick()
     }
 
     private func tick() {
+        let now = Date()
+        defer {
+            lastCheck = now
+            UserDefaults.standard.set(now.timeIntervalSince1970, forKey: Self.lastCheckKey)
+        }
+
         let config = ConfigStore.shared.config
         guard config.enabled, !config.automations.isEmpty else { return }
-        let parts = Calendar.current.dateComponents(
-            [.year, .month, .day, .hour, .minute, .weekday], from: Date())
-        guard let hour = parts.hour, let minute = parts.minute, let weekday = parts.weekday else { return }
-        let stamp = "\(parts.year ?? 0)-\(parts.month ?? 0)-\(parts.day ?? 0) \(hour):\(minute)"
 
         for job in config.automations where job.enabled {
-            guard job.hour == hour, job.minute == minute,
-                  job.weekdays.contains(weekday),
-                  lastFired[job.id] != stamp else { continue }
-            lastFired[job.id] = stamp
-            SleightLog.log("automation: firing \(job.summary)")
+            guard let due = mostRecentOccurrence(of: job, at: now) else { continue }
+            // Already accounted for on an earlier pass.
+            guard due > lastCheck, lastFired[job.id] != due else { continue }
+            let late = now.timeIntervalSince(due)
+            guard late <= catchUpWindow else {
+                SleightLog.log("automation: skipping \(job.summary) — \(Int(late / 60))m late, past the catch-up window")
+                continue
+            }
+            lastFired[job.id] = due
+            let lateness = late < 60 ? "" : " (\(Int(late / 60))m late)"
+            SleightLog.log("automation: firing \(job.summary)\(lateness)")
             run(job)
         }
+    }
+
+    /// The last time this job was due at or before `now`, or nil if its most
+    /// recent scheduled time falls on a weekday it isn't set to run.
+    ///
+    /// Only the single most recent match is considered: anything earlier is
+    /// over a day old, and so past the catch-up window regardless.
+    private func mostRecentOccurrence(of job: Automation, at now: Date) -> Date? {
+        let calendar = Calendar.current
+        guard let due = calendar.nextDate(
+            after: now,
+            matching: DateComponents(hour: job.hour, minute: job.minute),
+            matchingPolicy: .nextTime,
+            direction: .backward
+        ) else { return nil }
+        let weekday = calendar.component(.weekday, from: due)
+        return job.weekdays.contains(weekday) ? due : nil
     }
 
     private func run(_ job: Automation) {

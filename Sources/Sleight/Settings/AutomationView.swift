@@ -42,7 +42,7 @@ struct AutomationView: View {
                 }
                 .buttonStyle(.borderless)
             } footer: {
-                Text("Automations run while Sleight is running. A time that passes while the Mac is asleep is skipped, not run late.")
+                Text("Automations run while Sleight is running. A time that passes while the Mac is asleep — or while Sleight is closed — runs as soon as it comes back, unless it's more than 6 hours late.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
