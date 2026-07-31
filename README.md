@@ -55,18 +55,44 @@ Details that make it feel native:
 
 ## Install
 
-### Download (easiest)
+### One line (easiest)
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/kamenlevi/Sleight/main/scripts/install.sh | bash
+```
+
+Downloads the latest release, puts `Sleight.app` into /Applications and opens
+it. Nothing to build, no Xcode tools needed, and no security dialog:
+command-line downloads skip the quarantine flag that browser downloads get.
+
+Then grant the two permissions it asks for — see [below](#permissions).
+
+### Or download the zip
 
 1. Download `Sleight-<version>.zip` from the
    [latest release](https://github.com/kamenlevi/Sleight/releases/latest) and unzip it.
 2. Drag `Sleight.app` into your **Applications** folder.
-3. Open it. macOS will warn that it can't verify the app (it's signed with a
-   local certificate, not notarized) — allow it in
-   System Settings → Privacy & Security → "Open Anyway".
+3. Open it. Because browsers quarantine downloads and Sleight isn't notarized
+   (that costs $99/year), macOS says it can't verify the app. Click **Done**,
+   then open **System Settings → Privacy & Security**, scroll down to the
+   **Security** section and press **Open Anyway**. One-time — or skip it
+   entirely with the one-line install above.
 
 If you skip step 2 and launch straight from Downloads, Sleight installs
 itself into Applications and relaunches from there — running from a
 quarantined folder would break self-updating and permissions.
+
+### Permissions
+
+Sleight asks on first launch. If you miss the prompts, both live in
+**System Settings → Privacy & Security**:
+
+- **Input Monitoring** — how it reads individual fingers on the trackpad.
+- **Accessibility** — how it swallows the scroll events macOS would otherwise
+  send while you're turning a dial.
+
+Switch Sleight on in each, then quit and reopen it: permissions only take
+effect for a fresh launch.
 
 ### Build from source
 

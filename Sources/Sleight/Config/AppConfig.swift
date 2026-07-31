@@ -459,7 +459,15 @@ struct SleightConfig: Codable, Equatable {
     var fourFingerTap = TapConfig()
     var fiveFingerTap = TapConfig()
     var customGestures: [CustomGesture] = []
-    var shortcuts: [ShortcutBinding] = []
+    /// ⌥Space cycles the keyboard backlight off · 20% · 100% out of the box —
+    /// the one binding worth having before you've configured anything. Space
+    /// with Option alone isn't a system shortcut (⌥Space types a non-breaking
+    /// space in text fields, which the Shortcuts tab warns about), and it can
+    /// be switched off or deleted like any other.
+    var shortcuts: [ShortcutBinding] = [
+        ShortcutBinding(keyCode: 49, modifiers: Keystrokes.opt,
+                        action: .keyboardBrightnessCycle),
+    ]
     var automations: [Automation] = []
     var hapticDetents = true
     var showHUD = true
