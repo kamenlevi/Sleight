@@ -46,6 +46,8 @@ struct AutomationView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
+
+            WakeHelperSection()
         }
         .formStyle(.grouped)
     }
@@ -60,6 +62,49 @@ struct AutomationView: View {
                 }
             }
         )
+    }
+}
+
+/// Opt-in to the privileged wake helper. Off by default and clearly explained:
+/// it asks for an admin password and leaves a root daemon behind, which is not
+/// something to switch on for someone.
+private struct WakeHelperSection: View {
+    @State private var helper = WakeHelper.shared
+    @State private var store = ConfigStore.shared
+
+    var body: some View {
+        Section {
+            Toggle(isOn: Binding(
+                get: { helper.isInstalled },
+                set: { wanted in wanted ? helper.install() : helper.uninstall() }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Wake the Mac to run automations")
+                    Text(helper.isInstalled
+                         ? "Installed. The Mac wakes briefly for each automation, runs it at the scheduled time, and goes back to sleep."
+                         : "Without this, an automation due while the Mac is asleep runs at the next wake instead — usually within about 15 minutes.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .disabled(helper.busy)
+
+            if let error = helper.lastError {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+            }
+        } header: {
+            Text("While Asleep")
+        } footer: {
+            Text("Setting the backlight or the volume is something a running program does, so the Mac has to be awake for it. Only macOS can schedule a wake, and only with administrator rights — so this installs a small background helper, which asks for your password once. It does nothing but book those wake-ups, and turning this off removes it again. Waking costs a little battery each time.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .onAppear {
+            helper.refresh()
+            if helper.isInstalled { helper.writeSchedule(store.config) }
+        }
     }
 }
 

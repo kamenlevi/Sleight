@@ -15,6 +15,8 @@ final class AutomationScheduler {
     static let shared = AutomationScheduler()
 
     private var timer: Timer?
+    /// Aimed at the exact second of the next job when one is nearly due.
+    private var preciseTimer: Timer?
     /// Occurrence each job last ran for, so a job can't run twice for the
     /// same scheduled time.
     private var lastFired: [UUID: Date] = [:]
@@ -78,6 +80,47 @@ final class AutomationScheduler {
             SleightLog.log("automation: firing \(job.summary)\(lateness)")
             run(job)
         }
+
+        armPreciseTimer(config, now: now)
+    }
+
+    /// Twenty-second polling is fine for catching up, but it would run a job up
+    /// to twenty seconds after its time — and when the wake helper has gone to
+    /// the trouble of waking the Mac for an exact minute, that's the whole
+    /// point thrown away. So once a job is nearly due, aim a one-shot timer at
+    /// the second itself.
+    private func armPreciseTimer(_ config: SleightConfig, now: Date) {
+        preciseTimer?.invalidate()
+        preciseTimer = nil
+        let calendar = Calendar.current
+        guard let soonest = config.automations
+            .filter(\.enabled)
+            .compactMap({ nextOccurrence(of: $0, after: now, calendar: calendar) })
+            .min(),
+            soonest.timeIntervalSince(now) <= 120
+        else { return }
+
+        let timer = Timer(fire: soonest.addingTimeInterval(0.2), interval: 0, repeats: false) { _ in
+            Task { @MainActor in AutomationScheduler.shared.tick() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        preciseTimer = timer
+    }
+
+    /// The next time this job comes round after `date`.
+    private func nextOccurrence(of job: Automation, after date: Date,
+                                calendar: Calendar) -> Date? {
+        let target = DateComponents(hour: job.hour, minute: job.minute)
+        var cursor = date
+        for _ in 0..<8 {
+            guard let candidate = calendar.nextDate(after: cursor, matching: target,
+                                                    matchingPolicy: .nextTime) else { return nil }
+            if job.weekdays.contains(calendar.component(.weekday, from: candidate)) {
+                return candidate
+            }
+            cursor = candidate
+        }
+        return nil
     }
 
     /// The last time this job was due at or before `now`, or nil if its most

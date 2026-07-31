@@ -542,6 +542,7 @@ final class ConfigStore {
             guard config != oldValue else { return }
             scheduleSave()
             GestureCoordinator.shared.configChanged(config)
+            WakeHelper.shared.configChanged(config)
         }
     }
 
