@@ -56,7 +56,7 @@ struct VisualizerView: View {
                 Button {
                     openMenagerie()
                 } label: {
-                    Label("Menagerie — this, as a game", systemImage: "fish")
+                    Label("Menagerie", systemImage: "fish")
                 }
                 .help("Cardboard creatures that live under your fingers — koi, fireflies, puppets. Opens Menagerie (or its download page).")
             }
