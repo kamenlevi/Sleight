@@ -730,7 +730,7 @@ struct AboutView: View {
             Link("github.com/kamenlevi/Sleight",
                  destination: URL(string: "https://github.com/kamenlevi/Sleight")!)
                 .font(.callout)
-            Text("Free and open source · MIT License")
+            Text("Free and open source · GPLv3")
                 .font(.footnote)
                 .foregroundStyle(.tertiary)
         }

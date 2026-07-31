@@ -164,4 +164,7 @@ cd Sleight && ./scripts/update.sh
 
 ## License
 
-MIT
+GNU General Public License v3.0 — see [LICENSE](LICENSE).
+
+You may use, study, change and share it; anything you distribute that's built
+on it has to stay under the GPL too, with its source available.

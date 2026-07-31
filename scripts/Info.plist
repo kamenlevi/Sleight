@@ -29,7 +29,7 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
-	<string>MIT License</string>
+	<string>GNU General Public License v3.0</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 </dict>
