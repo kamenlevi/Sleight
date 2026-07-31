@@ -73,17 +73,24 @@ enum ScreenshotMode {
             Automation(action: .mute, hour: 9, minute: 0, weekdays: [2, 3, 4, 5, 6]),
         ]
 
-        var pinch = CustomGesture()
-        pinch.name = "Thumb sweep"
-        var thumb = CustomFinger(x: 0.30, y: 0.28)
-        thumb.direction = .right
-        var index = CustomFinger(x: 0.58, y: 0.64)
-        index.direction = .none
-        var middle = CustomFinger(x: 0.75, y: 0.42)
-        middle.direction = .none
-        pinch.fingers = [thumb, index, middle]
-        pinch.control = .displayBrightness
-        config.customGestures = [pinch]
+        // A posture a hand actually makes: thumb resting low and left as an
+        // anchor, index and middle above it sweeping up together. The default
+        // zone radius is wide enough that three fingers' zones overlap into a
+        // mess, so these are tightened until they read as separate targets.
+        var gesture = CustomGesture()
+        gesture.name = "Thumb-hold sweep"
+        var thumb = CustomFinger(x: 0.27, y: 0.15)
+        thumb.radius = 0.13
+        thumb.direction = .none
+        var index = CustomFinger(x: 0.42, y: 0.52)
+        index.radius = 0.13
+        index.direction = .up
+        var middle = CustomFinger(x: 0.58, y: 0.60)
+        middle.radius = 0.13
+        middle.direction = .up
+        gesture.fingers = [thumb, index, middle]
+        gesture.control = .displayBrightness
+        config.customGestures = [gesture]
 
         ConfigStore.shared.config = config
     }
