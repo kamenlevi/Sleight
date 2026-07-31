@@ -77,6 +77,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             exit(0)
         }
 
+        // Dev aid: `Sleight --screenshot <dir>` renders the settings window to
+        // PNGs for the README. Needs the normal app lifecycle (the shots come
+        // from a real key window), so it returns rather than exiting here.
+        if let directory = MainActor.assumeIsolated({ ScreenshotMode.requestedDirectory() }) {
+            NSApp.setActivationPolicy(.regular)
+            MainActor.assumeIsolated { ScreenshotMode.run(into: directory) }
+            return
+        }
+
         // Menu-bar-only even when running unbundled during development.
         NSApp.setActivationPolicy(.accessory)
 

@@ -4,6 +4,10 @@ import SwiftUI
 struct SettingsView: View {
     @State private var state = SettingsState.shared
 
+    /// Only ScreenshotMode passes this, to show fingers on the pad in an
+    /// image taken with nobody touching the trackpad.
+    var visualizerModel: VisualizerModel?
+
     private struct TabItem: Identifiable {
         let tab: SettingsTab
         let title: String
@@ -62,7 +66,7 @@ struct SettingsView: View {
                 case .custom: CustomGesturesView()
                 case .shortcuts: ShortcutsView()
                 case .automation: AutomationView()
-                case .visualizer: VisualizerView()
+                case .visualizer: VisualizerView(model: visualizerModel)
                 case .about: AboutView()
                 }
             }

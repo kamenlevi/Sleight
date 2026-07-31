@@ -577,6 +577,8 @@ final class ConfigStore {
     /// Slider drags mutate config dozens of times per second; encode and
     /// write to disk only once things settle.
     private func scheduleSave() {
+        // Sample state set up for a screenshot must never reach the real config.
+        guard !ScreenshotMode.isActive else { return }
         pendingSave?.cancel()
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }

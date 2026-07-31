@@ -9,7 +9,11 @@ final class VisualizerModel {
 /// Live view of raw trackpad contacts — instant confidence that every touch
 /// is registering, and a handy way to practice the gestures.
 struct VisualizerView: View {
-    @State private var model = VisualizerModel()
+    @State private var model: VisualizerModel
+
+    init(model: VisualizerModel? = nil) {
+        _model = State(initialValue: model ?? VisualizerModel())
+    }
 
     private let touchColors: [Color] = [.blue, .green, .orange, .pink, .purple, .teal, .yellow, .red]
 
@@ -44,10 +48,14 @@ struct VisualizerView: View {
             .aspectRatio(1.6, contentMode: .fit)
 
             HStack {
+                // ScreenshotMode has no live device by design; showing its
+                // "not detected" warning in a promo image would be a lie about
+                // the app, not about the machine taking the picture.
+                let hasDevice = TouchStream.shared.deviceCount > 0 || ScreenshotMode.isActive
                 Circle()
-                    .fill(TouchStream.shared.deviceCount > 0 ? .green : .red)
+                    .fill(hasDevice ? .green : .red)
                     .frame(width: 8, height: 8)
-                Text(TouchStream.shared.deviceCount > 0
+                Text(hasDevice
                      ? "\(model.touches.count) active \(model.touches.count == 1 ? "touch" : "touches")"
                      : "No multitouch device detected")
                     .font(.footnote)
