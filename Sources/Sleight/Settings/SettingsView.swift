@@ -17,8 +17,14 @@ struct SettingsView: View {
         .init(tab: .gestures, title: "Gestures"),
         .init(tab: .custom, title: "Custom"),
         .init(tab: .visualizer, title: "Visualizer"),
-        .init(tab: .about, title: "About"),
     ]
+
+    /// Peter Levi's PayPal account — the one Variety collects donations
+    /// through (`VarietyWindow.DONATE_URL` upstream), with the item named for
+    /// this app instead.
+    private static let donateURL = URL(string:
+        "https://www.paypal.com/donate/?business=DHQUELMQRQW46&no_recurring=0"
+        + "&item_name=Sleight&currency_code=EUR")!
 
     // A small, text-only custom tab bar instead of SwiftUI's TabView: on
     // macOS 26 the native tab strip paints a Liquid Glass blob behind the
@@ -35,6 +41,12 @@ struct SettingsView: View {
                         state.selectedTab = item.tab
                     }
                 }
+                // Not a pane of its own: it opens the donation page and leaves
+                // whichever tab you were on showing.
+                TabBarButton(title: "Donate", isSelected: false) {
+                    NSWorkspace.shared.open(Self.donateURL)
+                }
+                .help("Support Sleight — opens PayPal in your browser")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
