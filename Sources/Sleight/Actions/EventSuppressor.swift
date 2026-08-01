@@ -183,6 +183,12 @@ final class EventSuppressor: @unchecked Sendable {
             if type == .keyDown, suppressor.handleKeyDown(event) {
                 return nil
             }
+            // Mouse dial: hold-a-button knob and scroll actions. Checked
+            // before the suppression levels so a mouse gesture can't be
+            // eaten by the very session it started.
+            if MouseDial.shared.handle(event: event, type: type) {
+                return nil
+            }
             if suppressor.isInteresting(type), suppressor.shouldSwallow(event, type: type) {
                 return nil
             }

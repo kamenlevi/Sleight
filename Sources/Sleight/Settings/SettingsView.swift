@@ -572,8 +572,106 @@ struct GestureSettingsView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
+
+            Section {
+                MouseSection(config: $store.config.mouse)
+            } header: {
+                Text("Mouse")
+            } footer: {
+                Text("A mouse sensor can't feel the mouse itself twisting, so the knob is circling: hold the button and move the mouse in small circles, clockwise for up. The button's normal click still works — a short press without movement fires it on release.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
+    }
+}
+
+/// Hold a mouse button and circle the mouse: a knob. The wheel, while the
+/// button is held, can step actions.
+struct MouseSection: View {
+    @Binding var config: MouseConfig
+
+    /// CGEvent button numbers. Left (0) is deliberately absent: capturing it
+    /// would break clicking on things.
+    private let buttons: [(Int, String)] = [
+        (2, "Middle Button"), (1, "Right Button"), (3, "Button 4"), (4, "Button 5"),
+    ]
+
+    private let modifierBits: [(Int, String)] = [
+        (Keystrokes.ctrl, "⌃"), (Keystrokes.opt, "⌥"),
+        (Keystrokes.shift, "⇧"), (Keystrokes.cmd, "⌘"),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Mouse Knob").fontWeight(.medium)
+                        Text("Hold a mouse button and move the mouse in small circles, like turning a knob on the desk.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "computermouse.fill")
+                        .font(.title2)
+                        .foregroundStyle(.tint)
+                        .frame(width: 30)
+                }
+                Spacer()
+                Toggle("", isOn: $config.enabled)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
+
+            if config.enabled {
+                HStack {
+                    Picker("Hold", selection: $config.button) {
+                        ForEach(buttons, id: \.0) { number, name in
+                            Text(name).tag(number)
+                        }
+                    }
+                    .frame(maxWidth: 260)
+                    Spacer()
+                    // Optional keyboard modifiers that must be held with it.
+                    ForEach(modifierBits, id: \.0) { bit, symbol in
+                        Toggle(symbol, isOn: Binding(
+                            get: { config.modifiers & bit != 0 },
+                            set: { on in
+                                if on { config.modifiers |= bit } else { config.modifiers &= ~bit }
+                            }
+                        ))
+                        .toggleStyle(.button)
+                        .help("Require this key to be held along with the button")
+                    }
+                }
+
+                Picker("Circling adjusts", selection: $config.control) {
+                    ForEach(ContinuousControl.allCases.filter { $0 != .none }) { control in
+                        Label(control.label, systemImage: control.symbol).tag(control)
+                    }
+                }
+
+                HStack {
+                    Text("Sensitivity")
+                    Slider(value: $config.sensitivity, in: 0.25...3.0)
+                    Text(config.sensitivity, format: .number.precision(.fractionLength(1)))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .frame(width: 30, alignment: .trailing)
+                }
+                Toggle("Reverse direction", isOn: $config.inverted)
+
+                Divider()
+
+                DiscreteActionPicker(title: "Scroll up (while held)",
+                                     action: $config.scrollUpAction)
+                DiscreteActionPicker(title: "Scroll down (while held)",
+                                     action: $config.scrollDownAction)
+            }
+        }
+        .padding(.vertical, 2)
     }
 }
 

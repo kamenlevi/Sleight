@@ -451,6 +451,26 @@ struct TapConfig: Codable, Equatable {
     var targetApp: String?
 }
 
+/// Mouse gestures: hold a chosen button and move the mouse in small circles
+/// to turn a virtual knob, or roll the scroll wheel to step actions. (An
+/// optical sensor can't feel the mouse *itself* twisting — it only reads
+/// translation — so "rotate the mouse" means circling it on the desk.)
+struct MouseConfig: Codable, Equatable {
+    var enabled = false
+    /// CGEvent button number: 1 right, 2 middle, 3/4 the side buttons.
+    /// Left (0) is deliberately not offered — capturing it breaks clicking.
+    var button: Int = 2
+    /// Keystrokes modifier bits that must be held together with the button.
+    var modifiers: Int = 0
+    /// What circling adjusts.
+    var control: ContinuousControl = .volume
+    var sensitivity: Double = 1.0
+    var inverted = false
+    /// Scroll wheel while the button is held. Off = the wheel passes through.
+    var scrollUpAction: DiscreteAction = .none
+    var scrollDownAction: DiscreteAction = .none
+}
+
 struct SleightConfig: Codable, Equatable {
     var twoFingerDial = DialConfig(control: .volume)
     var threeFingerDial = DialConfig(control: .displayBrightness)
@@ -459,6 +479,7 @@ struct SleightConfig: Codable, Equatable {
     var fourFingerTap = TapConfig()
     var fiveFingerTap = TapConfig()
     var customGestures: [CustomGesture] = []
+    var mouse = MouseConfig()
     /// ⌥Space cycles the keyboard backlight off · 20% · 100% out of the box —
     /// the one binding worth having before you've configured anything. Space
     /// with Option alone isn't a system shortcut (⌥Space types a non-breaking
@@ -498,7 +519,7 @@ struct SleightConfig: Codable, Equatable {
     enum CodingKeys: String, CodingKey {
         case twoFingerDial, threeFingerDial, slider
         case threeFingerTap, fourFingerTap, fiveFingerTap
-        case customGestures, shortcuts, automations
+        case customGestures, mouse, shortcuts, automations
         case hapticDetents, showHUD, actionConfirmations, freezeScreen, freezePointer
         case keyboardLevels, animationSpeed, animateHUDReappear, enabled
     }
@@ -517,6 +538,7 @@ extension SleightConfig {
         fourFingerTap = (try? c.decodeIfPresent(TapConfig.self, forKey: .fourFingerTap)) ?? nil ?? defaults.fourFingerTap
         fiveFingerTap = (try? c.decodeIfPresent(TapConfig.self, forKey: .fiveFingerTap)) ?? nil ?? defaults.fiveFingerTap
         customGestures = (try? c.decodeIfPresent([CustomGesture].self, forKey: .customGestures)) ?? nil ?? defaults.customGestures
+        mouse = (try? c.decodeIfPresent(MouseConfig.self, forKey: .mouse)) ?? nil ?? defaults.mouse
         shortcuts = (try? c.decodeIfPresent([ShortcutBinding].self, forKey: .shortcuts)) ?? nil ?? defaults.shortcuts
         automations = (try? c.decodeIfPresent([Automation].self, forKey: .automations)) ?? nil ?? defaults.automations
         hapticDetents = (try? c.decodeIfPresent(Bool.self, forKey: .hapticDetents)) ?? nil ?? defaults.hapticDetents

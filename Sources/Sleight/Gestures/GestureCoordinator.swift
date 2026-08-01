@@ -82,6 +82,7 @@ final class GestureCoordinator: @unchecked Sendable {
 
     func start(initialConfig: SleightConfig) {
         config = initialConfig
+        MouseDial.shared.update(config: initialConfig.mouse, masterEnabled: initialConfig.enabled)
         TouchStream.shared.onFrame = { [weak self] frame in
             self?.handle(frame)
         }
@@ -158,6 +159,7 @@ final class GestureCoordinator: @unchecked Sendable {
 
     func configChanged(_ newConfig: SleightConfig) {
         config = newConfig
+        MouseDial.shared.update(config: newConfig.mouse, masterEnabled: newConfig.enabled)
         for engine in engines.values {
             engine.config = newConfig
         }

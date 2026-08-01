@@ -46,6 +46,34 @@ enum ScreenshotMode {
         capture(shots, index: 0, into: directory)
     }
 
+    /// The Mouse section on its own: in the real window it sits below the
+    /// fold of the Gestures tab, and a Form can't be scrolled from out here.
+    struct MousePreview: View {
+        @State private var config: MouseConfig = {
+            var config = MouseConfig()
+            config.enabled = true
+            config.scrollUpAction = .volumeUp
+            config.scrollDownAction = .volumeDown
+            return config
+        }()
+
+        var body: some View {
+            Form {
+                Section {
+                    MouseSection(config: $config)
+                } header: {
+                    Text("Mouse")
+                } footer: {
+                    Text("A mouse sensor can't feel the mouse itself twisting, so the knob is circling: hold the button and move the mouse in small circles, clockwise for up. The button's normal click still works — a short press without movement fires it on release.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .formStyle(.grouped)
+            .frame(width: 640, height: 560)
+        }
+    }
+
     /// A tidy, representative setup to photograph. Whatever is really in the
     /// config is left alone — `ConfigStore` refuses to save while this mode is
     /// active — so the images show the app in use rather than one machine's
@@ -92,13 +120,19 @@ enum ScreenshotMode {
         gesture.control = .displayBrightness
         config.customGestures = [gesture]
 
+        config.mouse.enabled = true
+        config.mouse.scrollUpAction = .volumeUp
+        config.mouse.scrollDownAction = .volumeDown
+
         ConfigStore.shared.config = config
     }
 
     private static func capture(_ shots: [(SettingsTab, String)], index: Int, into directory: URL) {
         guard index < shots.count else {
-            print("done")
-            NSApp.terminate(nil)
+            capture(MousePreview(), to: directory.appendingPathComponent("mouse.png")) {
+                print("done")
+                NSApp.terminate(nil)
+            }
             return
         }
         let (tab, name) = shots[index]
