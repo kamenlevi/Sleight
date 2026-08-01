@@ -6,6 +6,9 @@ on the trackpad and turn them like a dial.
 
 Free, open source, and fully native (Swift + SwiftUI, no dependencies).
 
+Requires macOS 14 or later, and a Magic Trackpad or a MacBook's built-in
+trackpad. Universal binary — Apple Silicon and Intel.
+
 ## Gestures
 
 | Gesture | How | Default action |
@@ -97,6 +100,8 @@ effect for a fresh launch.
 ### Build from source
 
 Requires macOS 14+ and the Xcode Command Line Tools (`xcode-select --install`).
+`build-app.sh` builds for both architectures; drop the `--arch` flags in it to
+build only for the machine you're on.
 
 ```sh
 git clone https://github.com/kamenlevi/Sleight.git
