@@ -70,6 +70,19 @@ command-line downloads skip the quarantine flag that browser downloads get.
 
 Then grant the two permissions it asks for — see [below](#permissions).
 
+### Or with Homebrew
+
+```sh
+brew install --cask kamenlevi/sleight/sleight
+```
+
+Homebrew quarantines downloads the way a browser does, so the first launch
+shows "Apple could not verify…" — allow it once in System Settings → Privacy
+& Security → **Open Anyway**, or skip that by installing with
+`--no-quarantine`. Upgrade with `brew upgrade --cask sleight`; if you let
+Sleight's own updater replace it instead, Homebrew's record of the installed
+version goes stale until the next `brew upgrade`.
+
 ### Or download the zip
 
 1. Download `Sleight-<version>.zip` from the
