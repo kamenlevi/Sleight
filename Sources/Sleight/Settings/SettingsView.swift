@@ -578,7 +578,7 @@ struct GestureSettingsView: View {
             } header: {
                 Text("Mouse")
             } footer: {
-                Text("A mouse sensor can't feel the mouse itself twisting, so the knob is circling: hold the button and move the mouse in small circles, clockwise for up. The button's normal click still works — a short press without movement fires it on release.")
+                Text("A mouse sensor can't feel the mouse itself twisting, so the knob is circling: hold the trigger and move the mouse in small circles, clockwise for up. The trigger can be any mouse button except left, or any key. Its normal press still works — a short press without movement fires it on release.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -592,24 +592,13 @@ struct GestureSettingsView: View {
 struct MouseSection: View {
     @Binding var config: MouseConfig
 
-    /// CGEvent button numbers. Left (0) is deliberately absent: capturing it
-    /// would break clicking on things.
-    private let buttons: [(Int, String)] = [
-        (2, "Middle Button"), (1, "Right Button"), (3, "Button 4"), (4, "Button 5"),
-    ]
-
-    private let modifierBits: [(Int, String)] = [
-        (Keystrokes.ctrl, "⌃"), (Keystrokes.opt, "⌥"),
-        (Keystrokes.shift, "⇧"), (Keystrokes.cmd, "⌘"),
-    ]
-
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Label {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Mouse Knob").fontWeight(.medium)
-                        Text("Hold a mouse button and move the mouse in small circles, like turning a knob on the desk.")
+                        Text("Hold a button or key and move the mouse in small circles, like turning a knob on the desk.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -627,24 +616,9 @@ struct MouseSection: View {
 
             if config.enabled {
                 HStack {
-                    Picker("Hold", selection: $config.button) {
-                        ForEach(buttons, id: \.0) { number, name in
-                            Text(name).tag(number)
-                        }
-                    }
-                    .frame(maxWidth: 260)
+                    Text("Hold")
                     Spacer()
-                    // Optional keyboard modifiers that must be held with it.
-                    ForEach(modifierBits, id: \.0) { bit, symbol in
-                        Toggle(symbol, isOn: Binding(
-                            get: { config.modifiers & bit != 0 },
-                            set: { on in
-                                if on { config.modifiers |= bit } else { config.modifiers &= ~bit }
-                            }
-                        ))
-                        .toggleStyle(.button)
-                        .help("Require this key to be held along with the button")
-                    }
+                    TriggerRecorder(config: $config)
                 }
 
                 Picker("Circling adjusts", selection: $config.control) {
@@ -672,6 +646,108 @@ struct MouseSection: View {
             }
         }
         .padding(.vertical, 2)
+    }
+}
+
+/// Click, then press the trigger to hold: any mouse button (except left) or
+/// any key, with whatever modifiers. Esc cancels. The same capture path as
+/// the shortcut recorder, extended to mouse buttons.
+private struct TriggerRecorder: View {
+    @Binding var config: MouseConfig
+    @State private var recording = false
+    @State private var monitor: Any?
+
+    var body: some View {
+        Button {
+            recording ? stopRecording() : startRecording()
+        } label: {
+            Text(recording ? "Press a button or key…" : currentLabel)
+                .font(.system(.body, design: .rounded).weight(.medium))
+                .frame(minWidth: 150)
+        }
+        .buttonStyle(.bordered)
+        .tint(recording ? .accentColor : nil)
+        .onDisappear { stopRecording() }
+        .help("Click, then press the mouse button or key you want to hold. Esc cancels.")
+    }
+
+    private var currentLabel: String {
+        if config.isKeyTrigger {
+            return Keystrokes.display(keyCode: config.keyCode, modifiers: config.modifiers)
+        }
+        return modifierSymbols + Self.buttonName(config.button)
+    }
+
+    private var modifierSymbols: String {
+        var parts = ""
+        if config.modifiers & Keystrokes.fn != 0 { parts += "🌐" }
+        if config.modifiers & Keystrokes.ctrl != 0 { parts += "⌃" }
+        if config.modifiers & Keystrokes.opt != 0 { parts += "⌥" }
+        if config.modifiers & Keystrokes.shift != 0 { parts += "⇧" }
+        if config.modifiers & Keystrokes.cmd != 0 { parts += "⌘" }
+        return parts
+    }
+
+    static func buttonName(_ number: Int) -> String {
+        switch number {
+        case 1: "Right Button"
+        case 2: "Middle Button"
+        default: "Button \(number + 1)"
+        }
+    }
+
+    private func startRecording() {
+        recording = true
+        // The session tap sees every button a mouse has; the local-monitor
+        // fallback (Accessibility not granted) covers the common ones.
+        if EventSuppressor.shared.canCaptureRecording {
+            EventSuppressor.shared.beginTriggerCapture { key, button, mods in
+                Task { @MainActor in accept(key: key, button: button, mods: mods) }
+            }
+        } else {
+            monitor = NSEvent.addLocalMonitorForEvents(
+                matching: [.keyDown, .rightMouseDown, .otherMouseDown]
+            ) { event in
+                if event.type == .keyDown {
+                    accept(key: Int(event.keyCode), button: -1,
+                           mods: Keystrokes.canonical(event.modifierFlags, keyCode: Int(event.keyCode)))
+                } else {
+                    accept(key: -1, button: event.buttonNumber,
+                           mods: Keystrokes.canonical(event.modifierFlags, keyCode: -1))
+                }
+                return nil
+            }
+        }
+    }
+
+    private func accept(key: Int, button: Int, mods: Int) {
+        if key == 53, mods == 0 { // Esc cancels
+            stopRecording()
+            return
+        }
+        if button == 0 { // never the left button: capturing it breaks clicking
+            NSSound.beep()
+            return
+        }
+        // A bare ordinary key would shadow typing every time it's held;
+        // functional keys (F-keys, arrows, paging) are fine on their own.
+        if button < 0, mods == 0, !Keystrokes.functionalKeys.contains(key) {
+            NSSound.beep()
+            return
+        }
+        config.keyCode = key >= 0 ? key : -1
+        if button >= 0 { config.button = button }
+        config.modifiers = mods
+        stopRecording()
+    }
+
+    private func stopRecording() {
+        recording = false
+        EventSuppressor.shared.endTriggerCapture()
+        if let monitor {
+            NSEvent.removeMonitor(monitor)
+            self.monitor = nil
+        }
     }
 }
 

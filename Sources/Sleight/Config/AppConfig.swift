@@ -457,18 +457,46 @@ struct TapConfig: Codable, Equatable {
 /// translation — so "rotate the mouse" means circling it on the desk.)
 struct MouseConfig: Codable, Equatable {
     var enabled = false
-    /// CGEvent button number: 1 right, 2 middle, 3/4 the side buttons.
-    /// Left (0) is deliberately not offered — capturing it breaks clicking.
+    /// The hold trigger is recorded, not picked from a list: any mouse button
+    /// (CGEvent number — 1 right, 2 middle, 3+ the extras; 0/left is refused,
+    /// capturing it would break clicking) or any keyboard key.
+    /// `keyCode >= 0` means the trigger is that key and `button` is ignored.
     var button: Int = 2
-    /// Keystrokes modifier bits that must be held together with the button.
+    var keyCode: Int = -1
+    /// Keystrokes modifier bits that must be held together with the trigger.
     var modifiers: Int = 0
     /// What circling adjusts.
     var control: ContinuousControl = .volume
     var sensitivity: Double = 1.0
     var inverted = false
-    /// Scroll wheel while the button is held. Off = the wheel passes through.
+    /// Scroll wheel while the trigger is held. Off = the wheel passes through.
     var scrollUpAction: DiscreteAction = .none
     var scrollDownAction: DiscreteAction = .none
+
+    var isKeyTrigger: Bool { keyCode >= 0 }
+
+    init() {}
+
+    enum CodingKeys: String, CodingKey {
+        case enabled, button, keyCode, modifiers, control, sensitivity, inverted
+        case scrollUpAction, scrollDownAction
+    }
+
+    // Tolerant decoding, so configs saved by 1.18.0 (which had no keyCode)
+    // keep their mouse settings instead of resetting to defaults.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = MouseConfig()
+        enabled = (try? c.decodeIfPresent(Bool.self, forKey: .enabled)) ?? nil ?? defaults.enabled
+        button = (try? c.decodeIfPresent(Int.self, forKey: .button)) ?? nil ?? defaults.button
+        keyCode = (try? c.decodeIfPresent(Int.self, forKey: .keyCode)) ?? nil ?? defaults.keyCode
+        modifiers = (try? c.decodeIfPresent(Int.self, forKey: .modifiers)) ?? nil ?? defaults.modifiers
+        control = (try? c.decodeIfPresent(ContinuousControl.self, forKey: .control)) ?? nil ?? defaults.control
+        sensitivity = (try? c.decodeIfPresent(Double.self, forKey: .sensitivity)) ?? nil ?? defaults.sensitivity
+        inverted = (try? c.decodeIfPresent(Bool.self, forKey: .inverted)) ?? nil ?? defaults.inverted
+        scrollUpAction = (try? c.decodeIfPresent(DiscreteAction.self, forKey: .scrollUpAction)) ?? nil ?? defaults.scrollUpAction
+        scrollDownAction = (try? c.decodeIfPresent(DiscreteAction.self, forKey: .scrollDownAction)) ?? nil ?? defaults.scrollDownAction
+    }
 }
 
 struct SleightConfig: Codable, Equatable {

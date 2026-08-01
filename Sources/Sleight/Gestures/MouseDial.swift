@@ -93,6 +93,17 @@ final class MouseDial: @unchecked Sendable {
             return buttonUp(event)
         case .rightMouseDragged, .otherMouseDragged:
             return dragged(event)
+        case .keyDown:
+            return keyDown(event)
+        case .keyUp:
+            return keyUp(event)
+        case .mouseMoved:
+            // A key-armed hold has no button down, so circling arrives as
+            // plain movement rather than a drag.
+            lock.lock()
+            let capturing = state != .idle && config.isKeyTrigger
+            lock.unlock()
+            return capturing ? dragged(event) : false
         case .scrollWheel:
             return scrolled(event)
         default:
@@ -105,20 +116,70 @@ final class MouseDial: @unchecked Sendable {
     private func buttonDown(_ event: CGEvent) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        guard masterEnabled, config.enabled, state == .idle,
+        guard masterEnabled, config.enabled, !config.isKeyTrigger, state == .idle,
               Int(event.getIntegerValueField(.mouseEventButtonNumber)) == config.button,
               Keystrokes.canonical(event.flags, keyCode: -1) == config.modifiers
         else { return false }
 
+        arm(at: event.location)
+        return true
+    }
+
+    /// Reset all per-hold state; caller holds the lock.
+    private func arm(at location: CGPoint) {
         state = .armed
         pressTime = CFAbsoluteTimeGetCurrent()
-        pressLocation = event.location
+        pressLocation = location
         travel = 0
         segment = (0, 0)
         previous = nil
         pendingTurn = 0
         scrollAccumulator = 0
         usedScroll = false
+    }
+
+    // MARK: - Keyboard trigger
+
+    private func keyDown(_ event: CGEvent) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard masterEnabled, config.enabled, config.isKeyTrigger,
+              Int(event.getIntegerValueField(.keyboardEventKeycode)) == config.keyCode
+        else { return false }
+        // Holding a key autorepeats; while armed, the repeats are ours too.
+        if state != .idle { return true }
+        guard Keystrokes.canonical(event.flags, keyCode: config.keyCode) == config.modifiers
+        else { return false }
+
+        arm(at: CGEvent(source: nil)?.location ?? .zero)
+        return true
+    }
+
+    private func keyUp(_ event: CGEvent) -> Bool {
+        lock.lock()
+        guard state != .idle, config.isKeyTrigger,
+              Int(event.getIntegerValueField(.keyboardEventKeycode)) == config.keyCode
+        else {
+            lock.unlock()
+            return false
+        }
+        let wasRotating = state == .rotating
+        // Same courtesy as the button: a short, still press was real typing —
+        // replay it so the key's ordinary job still happens.
+        let replay = !wasRotating && !usedScroll && travel < 8
+            && CFAbsoluteTimeGetCurrent() - pressTime < 0.4
+        let keyCode = config.keyCode
+        let flags = event.flags
+        state = .idle
+        lock.unlock()
+
+        queue.async {
+            if wasRotating {
+                GestureCoordinator.shared.gestureEnded()
+            } else if replay {
+                Self.postKeyTap(keyCode: keyCode, flags: flags)
+            }
+        }
         return true
     }
 
@@ -250,6 +311,17 @@ final class MouseDial: @unchecked Sendable {
     }
 
     // MARK: - Click replay
+
+    private static func postKeyTap(keyCode: Int, flags: CGEventFlags) {
+        for down in [true, false] {
+            guard let tap = CGEvent(keyboardEventSource: nil,
+                                    virtualKey: CGKeyCode(keyCode),
+                                    keyDown: down) else { continue }
+            tap.flags = flags
+            tap.setIntegerValueField(.eventSourceUserData, value: syntheticEventTag)
+            tap.post(tap: .cghidEventTap)
+        }
+    }
 
     private static func postClick(button: Int, at location: CGPoint) {
         let mouseButton = CGMouseButton(rawValue: UInt32(button)) ?? .center

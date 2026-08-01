@@ -64,7 +64,7 @@ enum ScreenshotMode {
                 } header: {
                     Text("Mouse")
                 } footer: {
-                    Text("A mouse sensor can't feel the mouse itself twisting, so the knob is circling: hold the button and move the mouse in small circles, clockwise for up. The button's normal click still works — a short press without movement fires it on release.")
+                    Text("A mouse sensor can't feel the mouse itself twisting, so the knob is circling: hold the trigger and move the mouse in small circles, clockwise for up. The trigger can be any mouse button except left, or any key. Its normal press still works — a short press without movement fires it on release.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

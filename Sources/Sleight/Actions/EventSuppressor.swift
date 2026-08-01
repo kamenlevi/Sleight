@@ -66,6 +66,69 @@ final class EventSuppressor: @unchecked Sendable {
         lock.unlock()
     }
 
+    // While set (during mouse-trigger recording), the next key press OR mouse
+    // button press is captured and swallowed. Handler receives
+    // (keyCode, buttonNumber, modifiers) with -1 for whichever doesn't apply.
+    private var triggerCapture: (@Sendable (Int, Int, Int) -> Void)?
+    /// After capturing a button-down, its button-up must be swallowed too, or
+    /// the frontmost app receives a stray mouse-up it never saw go down.
+    private var swallowUpForButton = -1
+
+    func beginTriggerCapture(_ handler: @escaping @Sendable (Int, Int, Int) -> Void) {
+        lock.lock()
+        triggerCapture = handler
+        lock.unlock()
+    }
+
+    func endTriggerCapture() {
+        lock.lock()
+        triggerCapture = nil
+        lock.unlock()
+    }
+
+    /// Returns true if trigger recording consumed this event.
+    private func handleTriggerCapture(_ event: CGEvent, type: CGEventType) -> Bool {
+        lock.lock()
+        let capture = triggerCapture
+        let pendingUp = swallowUpForButton
+        lock.unlock()
+
+        // The captured button's up arrives after recording already ended.
+        if pendingUp >= 0, type == .rightMouseUp || type == .otherMouseUp,
+           Int(event.getIntegerValueField(.mouseEventButtonNumber)) == pendingUp {
+            lock.lock()
+            swallowUpForButton = -1
+            lock.unlock()
+            return true
+        }
+        guard let capture else { return false }
+
+        switch type {
+        case .keyDown:
+            let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
+            let modifierKeyCodes: Set<Int> = [54, 55, 56, 57, 58, 59, 60, 61, 62, 63]
+            if modifierKeyCodes.contains(keyCode) { return true }
+            if event.getIntegerValueField(.keyboardEventAutorepeat) != 0 { return true }
+            let modifiers = Keystrokes.canonical(event.flags, keyCode: keyCode)
+            lock.lock()
+            triggerCapture = nil
+            lock.unlock()
+            DispatchQueue.main.async { capture(keyCode, -1, modifiers) }
+            return true
+        case .rightMouseDown, .otherMouseDown:
+            let button = Int(event.getIntegerValueField(.mouseEventButtonNumber))
+            let modifiers = Keystrokes.canonical(event.flags, keyCode: -1)
+            lock.lock()
+            triggerCapture = nil
+            swallowUpForButton = button
+            lock.unlock()
+            DispatchQueue.main.async { capture(-1, button, modifiers) }
+            return true
+        default:
+            return false
+        }
+    }
+
     /// Returns true if a recording capture consumed this keyDown.
     private func handleRecording(_ event: CGEvent) -> Bool {
         lock.lock()
@@ -178,6 +241,11 @@ final class EventSuppressor: @unchecked Sendable {
                 return Unmanaged.passUnretained(event)
             }
             if type == .keyDown, suppressor.handleRecording(event) {
+                return nil
+            }
+            // Trigger recording outranks shortcut matching, so recording a
+            // combo that's already bound doesn't fire the binding instead.
+            if suppressor.handleTriggerCapture(event, type: type) {
                 return nil
             }
             if type == .keyDown, suppressor.handleKeyDown(event) {
