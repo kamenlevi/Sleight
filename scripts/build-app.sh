@@ -8,9 +8,29 @@ cd "$(dirname "$0")/.."
 # Universal: Apple Silicon and Intel in one binary. Every private framework
 # Sleight uses is reached through dlopen at runtime rather than linked, so
 # there is nothing architecture-specific to port — only to build for.
-ARCHS=(--arch arm64 --arch x86_64)
-swift build -c release "${ARCHS[@]}"
-BIN="$(swift build -c release "${ARCHS[@]}" --show-bin-path)"
+#
+# Each slice is built on its own and joined with lipo. Handing SwiftPM two
+# --arch flags at once makes it switch to Xcode's build system (xcbuild), which
+# the Command Line Tools alone don't ship, so that path only worked with a full
+# Xcode install (issue #1). Pass --native to build just this machine's slice.
+ARCHS=(arm64 x86_64)
+if [[ "${1:-}" == "--native" ]]; then
+  ARCHS=("$(uname -m)")
+fi
+
+BIN=build/bin
+rm -rf "$BIN"
+mkdir -p "$BIN"
+for ARCH in "${ARCHS[@]}"; do
+  swift build -c release --arch "$ARCH" --scratch-path ".build/$ARCH"
+done
+for TOOL in Sleight sleight-helper; do
+  SLICES=()
+  for ARCH in "${ARCHS[@]}"; do
+    SLICES+=(".build/$ARCH/release/$TOOL")
+  done
+  lipo -create "${SLICES[@]}" -output "$BIN/$TOOL"
+done
 
 APP=build/Sleight.app
 rm -rf "$APP"

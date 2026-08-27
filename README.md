@@ -113,8 +113,8 @@ effect for a fresh launch.
 ### Build from source
 
 Requires macOS 14+ and the Xcode Command Line Tools (`xcode-select --install`).
-`build-app.sh` builds for both architectures; drop the `--arch` flags in it to
-build only for the machine you're on.
+`build-app.sh` builds a universal binary; pass `--native` to build only for the
+machine you are on (faster).
 
 ```sh
 git clone https://github.com/kamenlevi/Sleight.git
