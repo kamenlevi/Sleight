@@ -187,7 +187,10 @@ private struct GestureEditor: View {
 
                 HStack {
                     Button {
-                        var finger = CustomFinger(x: 0.5, y: 0.3)
+                        // Step along the lower row so consecutive additions
+                        // never land on top of one another.
+                        var finger = CustomFinger(x: 0.2 + 0.15 * Double(gesture.fingers.count),
+                                                  y: 0.3)
                         finger.direction = .none
                         gesture.fingers.append(finger)
                         selectedFingerID = finger.id
@@ -364,7 +367,10 @@ private struct FingerCanvas: View {
                 }
             }
             .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .gesture(drawingGesture(in: geo.size), including: drawingBoundary ? .all : .none)
+            // Mask .none would silence the circles' drags too — it disables
+            // every gesture in the subview hierarchy, not just this one
+            // (issue #2). .subviews turns off only the drawing gesture.
+            .gesture(drawingGesture(in: geo.size), including: drawingBoundary ? .gesture : .subviews)
         }
     }
 
