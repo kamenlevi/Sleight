@@ -420,7 +420,8 @@ final class GestureEngine {
 
     /// Greedy nearest-match of touches onto a custom gesture's finger zones.
     /// If the gesture has a drawn boundary, every finger must land inside it.
-    private func matchPosture(_ gesture: CustomGesture, touches: [Touch], byStartPoint: Bool) -> [Int32: Int]? {
+    private func matchPosture(_ gesture: CustomGesture, touches: [Touch], byStartPoint: Bool,
+                              radiusScale: Float = 1) -> [Int32: Int]? {
         var available = Set(gesture.fingers.indices)
         var assignment: [Int32: Int] = [:]
         let boundary = (gesture.boundary?.count ?? 0) >= 3 ? gesture.boundary : nil
@@ -432,7 +433,7 @@ final class GestureEngine {
                 let finger = gesture.fingers[index]
                 let center = SIMD2<Float>(Float(finger.x), Float(finger.y))
                 let distance = length(point - center)
-                if distance < Float(finger.radius), distance < (best?.distance ?? .infinity) {
+                if distance < Float(finger.radius) * radiusScale, distance < (best?.distance ?? .infinity) {
                     best = (index, distance)
                 }
             }
@@ -483,32 +484,20 @@ final class GestureEngine {
         resetMeasurement(touches, at: time)
         if case .custom(let id, _) = gesture,
            let custom = config.customGestures.first(where: { $0.id == id }) {
-            // Fingers may have drifted from their zones; best-effort re-match
-            // by current position, ignoring zone radii.
-            customAssignment = rematchIgnoringRadius(custom, touches: touches)
+            // Fingers drift while suspended, so re-match leniently — but
+            // touches nowhere near the zones are a different touch, not a
+            // resume. Matching anything anywhere here is what let a stuck
+            // session turn ordinary swipes into gesture input.
+            guard let assignment = matchPosture(custom, touches: touches,
+                                                byStartPoint: false, radiusScale: 1.6) else {
+                coordinator?.gestureEnded()
+                phase = .dead
+                return
+            }
+            customAssignment = assignment
         }
         phase = .active(gesture)
         coordinator?.gestureResumed()
-    }
-
-    private func rematchIgnoringRadius(_ gesture: CustomGesture, touches: [Touch]) -> [Int32: Int] {
-        var available = Set(gesture.fingers.indices)
-        var assignment: [Int32: Int] = [:]
-        for touch in touches {
-            var best: (index: Int, distance: Float)?
-            for index in available {
-                let finger = gesture.fingers[index]
-                let distance = length(touch.point - SIMD2(Float(finger.x), Float(finger.y)))
-                if distance < (best?.distance ?? .infinity) {
-                    best = (index, distance)
-                }
-            }
-            if let best {
-                available.remove(best.index)
-                assignment[touch.id] = best.index
-            }
-        }
-        return assignment
     }
 
     // MARK: - Active gesture updates

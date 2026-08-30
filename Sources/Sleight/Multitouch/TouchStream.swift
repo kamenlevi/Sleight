@@ -104,10 +104,35 @@ final class TouchStream {
         return 0
     }
 
+    // deviceID -> pending lift watchdog. Touched only on `queue`.
+    private var liftWatchdogs: [UInt: DispatchWorkItem] = [:]
+    /// Frames stream continuously (~125 Hz) while anything is on the pad, and
+    /// a clean lift ends with a zero-contact frame. But the stream can also
+    /// just go quiet with contacts still "down" (abrupt palm reclassification,
+    /// a dropped contact mid-lift) — without a closing frame the gesture
+    /// engine holds its session open and a later touch resumes it anywhere on
+    /// the pad. Silence this long means the pad is empty: synthesize the lift.
+    private static let quietLiftDelay: Double = 0.30
+
     private func dispatch(_ frame: TouchFrame) {
         noteFrameReceived()
         queue.async { [weak self] in
-            self?.onFrame?(frame)
+            guard let self else { return }
+            self.onFrame?(frame)
+            self.liftWatchdogs.removeValue(forKey: frame.deviceID)?.cancel()
+            guard !frame.touches.isEmpty else { return }
+            let watchdog = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.liftWatchdogs[frame.deviceID] = nil
+                SleightLog.log("touch stream went quiet with \(frame.touches.count) contact(s) down — synthesizing lift")
+                self.onFrame?(TouchFrame(
+                    deviceID: frame.deviceID,
+                    timestamp: frame.timestamp + Self.quietLiftDelay,
+                    touches: []
+                ))
+            }
+            self.liftWatchdogs[frame.deviceID] = watchdog
+            self.queue.asyncAfter(deadline: .now() + Self.quietLiftDelay, execute: watchdog)
         }
     }
 
