@@ -526,6 +526,13 @@ struct GestureSettingsView: View {
                 )
             }
             Section {
+                SwipeSection(config: $store.config.threeFingerSwipe)
+            } footer: {
+                Text("Position-free: unlike a custom gesture it has no finger zones, so it starts wherever your hand lands. While it's on, macOS won't see three-finger swipes up or down (Mission Control and App Exposé) — sideways swipes for Spaces still work.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            Section {
                 SliderSection(config: $store.config.slider)
             }
 
@@ -769,6 +776,56 @@ private struct DialSection: View {
                     }
                 } icon: {
                     Image(systemName: symbol)
+                        .font(.title2)
+                        .foregroundStyle(.tint)
+                        .frame(width: 30)
+                }
+                Spacer()
+                Toggle("", isOn: $config.enabled)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
+
+            if config.enabled {
+                Picker("Controls", selection: $config.control) {
+                    ForEach(ContinuousControl.allCases) { control in
+                        Label(control.label, systemImage: control.symbol).tag(control)
+                    }
+                }
+
+                HStack {
+                    Text("Sensitivity")
+                    Slider(value: $config.sensitivity, in: 0.25...3.0)
+                    Text(config.sensitivity, format: .number.precision(.fractionLength(1)))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .frame(width: 30)
+                }
+
+                Toggle("Reverse direction", isOn: $config.inverted)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+/// Three fingers anywhere on the pad, sweeping up or down together — the
+/// Windows Precision Touchpad style continuous control.
+private struct SwipeSection: View {
+    @Binding var config: SwipeConfig
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Three-Finger Swipe").fontWeight(.medium)
+                        Text("Put three fingers anywhere on the pad and slide them up or down together. The further you slide, the further it moves.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "arrow.up.and.down")
                         .font(.title2)
                         .foregroundStyle(.tint)
                         .frame(width: 30)

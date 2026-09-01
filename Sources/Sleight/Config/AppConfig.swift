@@ -254,6 +254,23 @@ struct SliderConfig: Codable, Equatable {
     var inverted = false
 }
 
+/// The global three-finger vertical swipe: three fingers anywhere on the pad,
+/// travelling up or down together, drive a control continuously — the way a
+/// Windows Precision Touchpad handles volume. Deliberately position-free:
+/// unlike a custom gesture it has no finger zones, so it starts wherever the
+/// hand happens to land.
+struct SwipeConfig: Codable, Equatable {
+    /// Off by default: while it is on, macOS never sees a three-finger swipe
+    /// up or down, so Mission Control and App Expose stop responding to them.
+    /// That is too big a change to make behind an existing user's back.
+    var enabled = false
+    var control: ContinuousControl = .volume
+    /// 1.0 means sweeping ~55% of the pad's height covers the whole 0-100%
+    /// range, so the physical distance scales with the trackpad's size.
+    var sensitivity: Double = 1.0
+    var inverted = false
+}
+
 // MARK: - Custom gestures
 
 enum FingerDirection: String, Codable, CaseIterable, Identifiable {
@@ -502,6 +519,7 @@ struct MouseConfig: Codable, Equatable {
 struct SleightConfig: Codable, Equatable {
     var twoFingerDial = DialConfig(control: .volume)
     var threeFingerDial = DialConfig(control: .displayBrightness)
+    var threeFingerSwipe = SwipeConfig(control: .volume)
     var slider = SliderConfig(control: .keyboardBrightness)
     var threeFingerTap = TapConfig()
     var fourFingerTap = TapConfig()
@@ -545,7 +563,7 @@ struct SleightConfig: Codable, Equatable {
     var enabled = true
 
     enum CodingKeys: String, CodingKey {
-        case twoFingerDial, threeFingerDial, slider
+        case twoFingerDial, threeFingerDial, threeFingerSwipe, slider
         case threeFingerTap, fourFingerTap, fiveFingerTap
         case customGestures, mouse, shortcuts, automations
         case hapticDetents, showHUD, actionConfirmations, freezeScreen, freezePointer
@@ -561,6 +579,7 @@ extension SleightConfig {
         let defaults = SleightConfig()
         twoFingerDial = (try? c.decodeIfPresent(DialConfig.self, forKey: .twoFingerDial)) ?? nil ?? defaults.twoFingerDial
         threeFingerDial = (try? c.decodeIfPresent(DialConfig.self, forKey: .threeFingerDial)) ?? nil ?? defaults.threeFingerDial
+        threeFingerSwipe = (try? c.decodeIfPresent(SwipeConfig.self, forKey: .threeFingerSwipe)) ?? nil ?? defaults.threeFingerSwipe
         slider = (try? c.decodeIfPresent(SliderConfig.self, forKey: .slider)) ?? nil ?? defaults.slider
         threeFingerTap = (try? c.decodeIfPresent(TapConfig.self, forKey: .threeFingerTap)) ?? nil ?? defaults.threeFingerTap
         fourFingerTap = (try? c.decodeIfPresent(TapConfig.self, forKey: .fourFingerTap)) ?? nil ?? defaults.fourFingerTap
