@@ -15,6 +15,7 @@ trackpad. Universal binary — Apple Silicon and Intel.
 |---|---|---|
 | **Two-Finger Dial** | Place two fingers (thumb + index feels best) and rotate them like a knob | Volume |
 | **Three-Finger Dial** | Same knob motion with three fingers — e.g. index + middle together, thumb below | Display brightness |
+| **Three-Finger Swipe** | Three fingers anywhere on the pad, sliding up or down together — no zones, works wherever your hand lands | Volume (off by default) |
 | **Edge Slider** | One finger on the top edge, one on the bottom (same spot horizontally), sweep both sideways together | Keyboard backlight |
 | **Custom gestures** | Design your own in Settings → Custom: place finger zones on the pad, give each a direction or keep it stationary, draw a boundary where the gesture may start, choose speed and what it controls |  |
 | **3 / 4 / 5-finger tap** | Quick tap | Configurable |

@@ -4,13 +4,15 @@ import Foundation
 enum ContinuousGesture: Equatable {
     case twoFingerDial
     case threeFingerDial
+    /// Three fingers travelling up or down together, anywhere on the pad.
+    case threeFingerSwipe
     case slider
     case custom(id: UUID, fingerCount: Int)
 
     var fingerCount: Int {
         switch self {
         case .twoFingerDial, .slider: 2
-        case .threeFingerDial: 3
+        case .threeFingerDial, .threeFingerSwipe: 3
         case .custom(_, let count): count
         }
     }
@@ -42,9 +44,15 @@ final class GestureEngine {
     private struct TouchRecord {
         let startPoint: SIMD2<Float>
         let startTime: Double
+        /// Where this finger was when measurement was last reset — the same
+        /// instant `centroidAtStableCount` was sampled, so per-finger travel
+        /// can be compared against the centroid's.
+        var stablePoint: SIMD2<Float>
         var point: SIMD2<Float>
 
         var displacement: Float { length(point - startPoint) }
+        /// Travel since the last measurement reset.
+        var stableDelta: SIMD2<Float> { point - stablePoint }
     }
 
     // Tuning constants, in normalized trackpad units (whole pad = 1.0) and
@@ -74,6 +82,22 @@ final class GestureEngine {
         static let sliderMinTravel: Float = 0.045
         static let sliderAxisDominance: Float = 2.0
         static let sliderRange: Float = 0.70              // pad fraction = full range
+        // Three-finger vertical swipe (the position-free, Precision-Touchpad
+        // style volume gesture). All in normalized pad units.
+        //   deadzone      how far the hand travels before anything happens
+        //   freezeTravel  how far before native swipes are blocked (well
+        //                 under the deadzone, so Mission Control / App Expose
+        //                 never get the chance to fire)
+        //   axisDominance |dy| must beat this multiple of |dx|
+        //   togetherness  slowest finger's vertical travel / fastest finger's
+        //   range         pad fraction that sweeps the full 0-100%
+        //   maxRotation   a hand that is also turning is a dial, not a swipe
+        static let swipeDeadzone: Float = 0.035
+        static let swipeFreezeTravel: Float = 0.012
+        static let swipeAxisDominance: Float = 1.6
+        static let swipeMinTogetherness: Float = 0.45
+        static let swipeRange: Float = 0.55
+        static let swipeMaxRotation: Float = 0.12
         static let customMinTravel: Float = 0.05
         static let customStationaryLimit: Float = 0.04
         static let customChordDwell: Double = 0.30
@@ -199,9 +223,11 @@ final class GestureEngine {
             if let existing = records[touch.id] {
                 var updated = existing
                 updated.point = touch.point
+                updated.stablePoint = touch.point
                 newRecords[touch.id] = updated
             } else {
-                newRecords[touch.id] = TouchRecord(startPoint: touch.point, startTime: time, point: touch.point)
+                newRecords[touch.id] = TouchRecord(startPoint: touch.point, startTime: time,
+                                                   stablePoint: touch.point, point: touch.point)
             }
         }
         records = newRecords
@@ -244,6 +270,18 @@ final class GestureEngine {
 
         if evaluateActivations(touches, at: time) != nil { return }
 
+        // The three-finger swipe has to outrun macOS: Mission Control and App
+        // Expose fire from the same fingers, at less travel than our own
+        // deadzone. Freeze the native swipe as soon as the motion is clearly
+        // vertical and together, well before the gesture itself activates.
+        let swipeForming = count == 3
+            && config.threeFingerSwipe.enabled && config.threeFingerSwipe.control != .none
+            && swipeMotionIsVertical(touches, translation: translation,
+                                     minTravel: Tuning.swipeFreezeTravel)
+        if config.freezeScreen, !candidateFrozen, swipeForming {
+            setCandidateFreeze(true)
+        }
+
         // Motion-based early freeze: rotation is building and the fingers
         // aren't moving in parallel — this is a dial forming, not a scroll.
         if config.freezeScreen, !candidateFrozen, count == 2 || count == 3,
@@ -255,7 +293,7 @@ final class GestureEngine {
 
         // Frozen on posture but the motion says plain scroll (parallel, no
         // rotation): release the freeze so the scroll works with minimal loss.
-        if candidateFrozen,
+        if candidateFrozen, !swipeForming,
            parallelismEMA > Tuning.unfreezeParallelism,
            maxDisplacement > Tuning.unfreezeMinDisplacement,
            abs(rotationAccum) < Tuning.earlyFreezeRotation {
@@ -264,7 +302,8 @@ final class GestureEngine {
 
         // Clear scroll / swipe: give up until all fingers lift so we never
         // misfire mid-scroll.
-        if length(translation) > Tuning.scrollFailTranslation,
+        if !swipeForming,
+           length(translation) > Tuning.scrollFailTranslation,
            abs(rotationAccum) < Tuning.scrollFailMaxRotation {
             clearCandidateFreeze()
             phase = .dead
@@ -300,6 +339,11 @@ final class GestureEngine {
     private func evaluateActivations(_ touches: [Touch], at time: Double) -> ContinuousGesture? {
         let translation = centroid(of: touches) - centroidAtStableCount
         if let gesture = tryActivateCustom(touches, at: time) { return gesture }
+        // Ahead of the dial: three fingers sweeping vertically *together* is
+        // the swipe, and it must not be mistaken for the three-finger dial.
+        // (The two are already mutually exclusive — a dial turns fingers in
+        // opposing directions — but the order makes the intent explicit.)
+        if touches.count == 3, let gesture = tryActivateSwipe(touches, translation: translation) { return gesture }
         if touches.count == 2, let gesture = tryActivateSlider(touches, translation: translation) { return gesture }
         if touches.count == 2 || touches.count == 3,
            let gesture = tryActivateDial(touches, translation: length(translation)) { return gesture }
@@ -327,6 +371,59 @@ final class GestureEngine {
         return top.y > 1 - Tuning.sliderEdgeStrip
             && bottom.y < Tuning.sliderEdgeStrip
             && abs(top.x - bottom.x) < Tuning.sliderRailAlignment
+    }
+
+    /// Three fingers, anywhere on the pad, travelling up or down together —
+    /// the Precision-Touchpad style volume swipe. Position-free by design: no
+    /// landing zones, no boundary, only the shape of the motion.
+    private func tryActivateSwipe(_ touches: [Touch], translation: SIMD2<Float>) -> ContinuousGesture? {
+        let cfg = config.threeFingerSwipe
+        guard cfg.enabled, cfg.control != .none else { return nil }
+        guard swipeMotionIsVertical(touches, translation: translation,
+                                    minTravel: Tuning.swipeDeadzone) else { return nil }
+
+        activate(.threeFingerSwipe, control: cfg.control)
+        // Apply the travel that accumulated during recognition so the swipe
+        // has zero perceptible dead zone, like the dial and the slider.
+        emitSwipe(translation: translation, config: cfg)
+        return .threeFingerSwipe
+    }
+
+    /// Shared shape test for the three-finger swipe, used both by the
+    /// recognizer and (with a much smaller `minTravel`) by the early freeze.
+    private func swipeMotionIsVertical(_ touches: [Touch], translation: SIMD2<Float>,
+                                       minTravel: Float) -> Bool {
+        guard abs(translation.y) > minTravel else { return false }
+        guard abs(translation.y) > Tuning.swipeAxisDominance * abs(translation.x) else { return false }
+        guard abs(rotationAccum) < Tuning.swipeMaxRotation else { return false }
+        guard let togetherness = verticalTogetherness(touches),
+              togetherness > Tuning.swipeMinTogetherness else { return false }
+        return true
+    }
+
+    /// How closely the fingers are moving as one hand, vertically: the
+    /// slowest finger's travel over the fastest one's, or nil if they aren't
+    /// all going the same way. Measured since the last measurement reset, so
+    /// it needs no warm-up the way the parallelism EMA does — a quick flick
+    /// is recognized on the same frames as a slow sweep.
+    private func verticalTogetherness(_ touches: [Touch]) -> Float? {
+        var slowest = Float.greatestFiniteMagnitude
+        var fastest: Float = 0
+        var sign: Float = 0
+        for touch in touches {
+            guard let record = records[touch.id] else { return nil }
+            let dy = record.stableDelta.y
+            let thisSign: Float = dy < 0 ? -1 : 1
+            if sign == 0 {
+                sign = thisSign
+            } else if thisSign != sign {
+                return nil
+            }
+            slowest = min(slowest, abs(dy))
+            fastest = max(fastest, abs(dy))
+        }
+        guard fastest > 0 else { return nil }
+        return slowest / fastest
     }
 
     private func tryActivateDial(_ touches: [Touch], translation: Float) -> ContinuousGesture? {
@@ -514,6 +611,10 @@ final class GestureEngine {
                 emitDial(delta: delta, config: cfg)
             }
 
+        case .threeFingerSwipe:
+            let delta = frameCentroidDelta(touches)
+            emitSwipe(translation: delta, config: config.threeFingerSwipe)
+
         case .slider:
             let delta = frameCentroidDelta(touches)
             emitSlider(translation: delta, config: config.slider)
@@ -545,6 +646,13 @@ final class GestureEngine {
         // Clockwise (negative math angle) turns the value up, like a real knob.
         let sign: Float = cfg.inverted ? 1 : -1
         let change = sign * delta / (2 * .pi) * Float(cfg.sensitivity)
+        coordinator?.gestureChanged(delta: change)
+    }
+
+    private func emitSwipe(translation: SIMD2<Float>, config cfg: SwipeConfig) {
+        // Pad coordinates put y up, so sweeping up turns the value up.
+        let sign: Float = cfg.inverted ? -1 : 1
+        let change = sign * translation.y / Tuning.swipeRange * Float(cfg.sensitivity)
         coordinator?.gestureChanged(delta: change)
     }
 
