@@ -178,7 +178,11 @@ final class GestureCoordinator: @unchecked Sendable {
     /// gesture finishes forming. Cleared by the engine if it was a scroll.
     func candidateFreezeChanged(_ frozen: Bool) {
         guard session == nil else { return } // active gesture owns suppression
-        EventSuppressor.shared.setLevel(frozen && config.freezeScreen ? .scrollOnly : .off)
+        // The three-finger swipe freezes even with freezeScreen off — it
+        // cannot work without suppression (the engine only sends ungated
+        // freezes for it, so this doesn't loosen the dials' gating).
+        let allowed = config.freezeScreen || config.threeFingerSwipe.enabled
+        EventSuppressor.shared.setLevel(frozen && allowed ? .scrollOnly : .off)
     }
 
     func gestureBegan(control: ContinuousControl, deviceID: UInt) {

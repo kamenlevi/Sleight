@@ -528,7 +528,7 @@ struct GestureSettingsView: View {
             Section {
                 SwipeSection(config: $store.config.threeFingerSwipe)
             } footer: {
-                Text("Position-free: unlike a custom gesture it has no finger zones, so it starts wherever your hand lands. While it's on, macOS won't see three-finger swipes up or down (Mission Control and App Exposé) — sideways swipes for Spaces still work.")
+                Text("Position-free: unlike a custom gesture it has no finger zones, so it starts wherever your hand lands. While it's on, macOS won't see three-finger swipes up or down (Mission Control and App Exposé) — sideways swipes for Spaces still work. Not compatible with the accessibility \"three finger drag\" option, which uses the same motion.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
